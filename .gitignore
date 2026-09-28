@@ -1,0 +1,63 @@
+# Local secrets (commit only templates with empty/example values)
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+application-local.properties
+application-local.yml
+application-local.yaml
+
+# IDE and operating-system files
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.DS_Store
+Thumbs.db
+
+# Java / Gradle outputs; keep the Gradle wrapper JAR
+.gradle/
+.kotlin/
+build/
+out/
+*.class
+
+# Python environments and generated files
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+*.egg-info/
+dist/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# Local runtime data and logs
+*.log
+logs/
+*.pid
+*.hprof
+*.mv.db
+*.trace.db
+*.sqlite
+*.sqlite3
+dump.rdb
+appendonlydir/
+/data/
+/postgres-data/
+/redis-data/
