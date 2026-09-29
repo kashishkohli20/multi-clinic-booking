@@ -1,13 +1,7 @@
 package com.booking.bookingsystem.service;
 
-import com.booking.bookingsystem.entity.Appointment;
-import com.booking.bookingsystem.entity.Doctor;
-import com.booking.bookingsystem.entity.Hold;
-import com.booking.bookingsystem.entity.Slot;
-import com.booking.bookingsystem.repository.AppointmentRepository;
-import com.booking.bookingsystem.repository.DoctorRepository;
-import com.booking.bookingsystem.repository.HoldRepository;
-import com.booking.bookingsystem.repository.SlotRepository;
+import com.booking.bookingsystem.entity.*;
+import com.booking.bookingsystem.repository.*;
 import com.booking.bookingsystem.service.exception.ResourceNotFoundException;
 import com.booking.bookingsystem.service.exception.SlotUnavailableException;
 import jakarta.transaction.Transactional;
@@ -27,21 +21,26 @@ public class BookingService {
     private final HoldRepository holdRepository;
     private final DoctorRepository doctorRepository;
     private final AppointmentRepository appointmentRepository;
+    private final ClinicRepository clinicRepository;
 
     @Transactional
     public Appointment bookSlot(UUID slotId, UUID clinicId, UUID patientId) {
 
         Slot slot = slotRepository.findById(slotId).orElseThrow(() -> new ResourceNotFoundException("Slot not found"));
+        Clinic clinic = clinicRepository.findById(clinicId).orElseThrow(() -> new ResourceNotFoundException("Clinic not found"));
 
         if (slot.getStatus() != Slot.Status.OPEN) {
             throw new SlotUnavailableException("Slot is not open");
+        }
+
+        if (!slot.getClinic().getId().equals(clinicId)) {
+            throw new SlotUnavailableException("Slot at this clinic is not found.");
         }
 
         slot.setStatus(Slot.Status.BOOKED);
         slotRepository.save(slot);
 
         Appointment appointment = new Appointment();
-        appointment.setClinicId(clinicId);
         appointment.setPatientId(patientId);
         appointment.setBookedSlotId(slotId);
         appointment.setBookedById(patientId);
@@ -120,9 +119,6 @@ public class BookingService {
         Appointment appointment = new Appointment();
         appointment.setBookedSlotId(slot.getId());
         appointment.setPatientId(hold.getHoldById());
-        // In a fully built system, you would look up the clinic ID associated with the slot/doctor,
-        // for this slice we will fallback link it from our test metadata
-        appointment.setClinicId(UUID.fromString("11111111-1111-1111-1111-111111111111"));
         appointment.setBookedById(hold.getHoldById());
         appointment.setStatus(Appointment.Status.CONFIRMED);
 

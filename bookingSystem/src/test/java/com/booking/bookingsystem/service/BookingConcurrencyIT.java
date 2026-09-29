@@ -1,7 +1,9 @@
 package com.booking.bookingsystem.service;
 
+import com.booking.bookingsystem.entity.Clinic;
 import com.booking.bookingsystem.entity.Slot;
 import com.booking.bookingsystem.repository.SlotRepository;
+import com.booking.bookingsystem.repository.ClinicRepository;
 import com.booking.bookingsystem.service.exception.SlotUnavailableException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -27,6 +29,9 @@ class BookingConcurrencyIT {
     @Autowired
     private SlotRepository slotRepository;
 
+    @Autowired
+    private ClinicRepository clinicRepository;
+
     @Test
     @DisplayName("Should only allow one user to book a slot when multiple requests land simultaneously")
     void verifyOptimisticLocking_UnderConcurrentLoad() throws InterruptedException {
@@ -36,10 +41,14 @@ class BookingConcurrencyIT {
         slot.setStartTime(Instant.now().plus(1, ChronoUnit.DAYS));
         slot.setEndTime(Instant.now().plus(1, ChronoUnit.DAYS).plus(1, ChronoUnit.HOURS));
         slot.setDoctorId(UUID.randomUUID());
+        Clinic clinic = new Clinic();
+        clinic.setName("Concurrency test clinic");
+        clinic = clinicRepository.saveAndFlush(clinic);
+        slot.setClinic(clinic);
         slot = slotRepository.saveAndFlush(slot);
 
         UUID targetSlotId = slot.getId();
-        UUID clinicId = UUID.randomUUID();
+        UUID clinicId = clinic.getId();
 
         // 2. Setup Multi-threading tools
         int threadCount = 5;
@@ -56,7 +65,7 @@ class BookingConcurrencyIT {
             executorService.submit(() -> {
                 try {
                     latch.await(); // Wait here until the gate opens to ensure they all strike at once
-                    bookingService.bookSlot(targetSlotId, patientId, clinicId);
+                    bookingService.bookSlot(targetSlotId, clinicId, patientId);
                     successCount.incrementAndGet();
                 } catch (SlotUnavailableException | org.springframework.orm.ObjectOptimisticLockingFailureException e) {
                     failureCount.incrementAndGet();

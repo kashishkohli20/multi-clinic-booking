@@ -63,12 +63,11 @@ public class DataSeeder implements CommandLineRunner {
         log.info("Seeded Clinic: {} with ID: {}", docklandsClinic.getName(), docklandsClinic.getId());
 
         // 3. Create and persist an OPEN Slot for this Doctor (Scheduled for tomorrow at 10:00 AM)
-        Instant now = Instant.now();
         Slot openSlot = new Slot();
         openSlot.setDoctorId(doctor.getId()); // Perfectly maps the newly generated UUID!
         openSlot.setStatus(Slot.Status.OPEN);
+        openSlot.setClinic(southbankClinic);
         openSlot.setTimezone("Australia/Sydney");
-//        openSlot.setStartTime(Instant.now().plus(1, ChronoUnit.DAYS).with(10, ChronoUnit.HOURS));
         ZoneId slotZone = ZoneId.of(openSlot.getTimezone());
 
         openSlot.setStartTime(
@@ -87,6 +86,7 @@ public class DataSeeder implements CommandLineRunner {
         Slot bookedSlot = new Slot();
         bookedSlot.setDoctorId(doctor.getId());
         bookedSlot.setStatus(Slot.Status.BOOKED);
+        bookedSlot.setClinic(southbankClinic);
         bookedSlot.setTimezone("Australia/Sydney");
         ZoneId bookedSlotZone = ZoneId.of(bookedSlot.getTimezone());
 

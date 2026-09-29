@@ -22,9 +22,6 @@ public class Appointment {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(name = "clinic_id")
-    private UUID clinicId;
-
     @Column(name = "patient_id")
     private UUID patientId;
 

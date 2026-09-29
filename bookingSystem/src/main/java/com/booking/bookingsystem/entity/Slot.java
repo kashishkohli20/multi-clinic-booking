@@ -32,8 +32,8 @@ public class Slot {
     @Column(name = "doctor_id")
     private UUID doctorId;
 
-    @ManyToOne
-    @JoinColumn(name = "clinic_id")
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "clinic_id", nullable = false)
     private Clinic clinic;
 
     @Column(name = "start_time")
