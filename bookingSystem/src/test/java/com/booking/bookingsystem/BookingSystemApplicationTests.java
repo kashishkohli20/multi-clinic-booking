@@ -1,5 +1,10 @@
 package com.booking.bookingsystem;
 
+import com.booking.bookingsystem.entity.Doctor;
+import com.booking.bookingsystem.entity.Patient;
+import com.booking.bookingsystem.repository.DoctorRepository;
+import com.booking.bookingsystem.repository.PatientRepository;
+
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
@@ -19,6 +24,9 @@ import org.springframework.boot.test.context.SpringBootTest;
 @ActiveProfiles("test")
 @SpringBootTest
 class BookingSystemApplicationTests {
+    @Autowired DoctorRepository doctors;
+    @Autowired PatientRepository patientsRepository;
+
 
     @Autowired BookingService bookingService;
     @Autowired ClinicRepository clinics;
@@ -35,13 +43,13 @@ class BookingSystemApplicationTests {
         Clinic clinic = clinics.saveAndFlush(new Clinic());
         Slot slot = new Slot();
         slot.setClinic(clinic);
-        slot.setDoctorId(UUID.randomUUID());
+        slot.setDoctorId(doctors.saveAndFlush(new Doctor()).getId());
         slot.setTimezone("Australia/Melbourne");
         slot.setStartTime(Instant.now().plusSeconds(3600));
         slot.setEndTime(Instant.now().plusSeconds(7200));
         slot.setStatus(Slot.Status.OPEN);
         slot = slots.saveAndFlush(slot);
-        UUID patientId = UUID.randomUUID();
+        UUID patientId = patientsRepository.saveAndFlush(new Patient()).getId();
 
         Hold hold = bookingService.holdSlot(slot.getId(), patientId);
         holds.flush();

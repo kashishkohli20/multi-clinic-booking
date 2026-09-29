@@ -24,6 +24,7 @@ import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class BookingServiceTest {
+    @Mock private PatientRepository patientRepository;
     @Mock private SlotRepository slotRepository;
     @Mock private HoldRepository holdRepository;
     @Mock private AppointmentRepository appointmentRepository;
@@ -33,7 +34,7 @@ class BookingServiceTest {
     @BeforeEach
     void setup() {
         bookingService = new BookingService(slotRepository, holdRepository, null,
-                appointmentRepository, Clock.fixed(NOW, ZoneOffset.UTC), Duration.ofSeconds(45));
+                appointmentRepository, patientRepository, Clock.fixed(NOW, ZoneOffset.UTC), Duration.ofSeconds(45));
     }
 
     @Test
@@ -46,6 +47,7 @@ class BookingServiceTest {
         slot.setStartTime(NOW.plusSeconds(3600));
         when(slotRepository.findById(slotId)).thenReturn(Optional.of(slot));
 
+        when(patientRepository.existsById(patientId)).thenReturn(true);
         Hold hold = bookingService.holdSlot(slotId, patientId);
 
         assertEquals(NOW.plusSeconds(45), hold.getExpiresAt());

@@ -1,5 +1,10 @@
 package com.booking.bookingsystem.service;
 
+import com.booking.bookingsystem.entity.Doctor;
+import com.booking.bookingsystem.entity.Patient;
+import com.booking.bookingsystem.repository.DoctorRepository;
+import com.booking.bookingsystem.repository.PatientRepository;
+
 import com.booking.bookingsystem.PostgresTestConfiguration;
 import com.booking.bookingsystem.entity.*;
 import com.booking.bookingsystem.repository.*;
@@ -22,6 +27,9 @@ import static org.mockito.Mockito.*;
 @ActiveProfiles("test")
 @SpringBootTest
 class ReservationDeadlineIT {
+    @Autowired DoctorRepository doctors;
+    @Autowired PatientRepository patientsRepository;
+
     private static final Instant NOW = Instant.parse("2030-01-01T00:00:00Z");
     @Autowired HoldRepository holds;
     @Autowired SlotRepository slots;
@@ -46,13 +54,15 @@ class ReservationDeadlineIT {
         Clinic clinic = clinics.saveAndFlush(new Clinic());
         Slot slot = new Slot();
         slot.setClinic(clinic);
+        slot.setDoctorId(doctors.saveAndFlush(new Doctor()).getId());
+        slot.setTimezone("UTC");
         slot.setStatus(slotStatus);
         slot.setStartTime(NOW.plusSeconds(3600));
         slot.setEndTime(NOW.plusSeconds(7200));
         slot = slots.saveAndFlush(slot);
         Hold hold = new Hold();
         hold.setSlotId(slot.getId());
-        hold.setHoldById(UUID.randomUUID());
+        hold.setHoldById(patientsRepository.saveAndFlush(new Patient()).getId());
         hold.setStatus(status);
         hold.setExpiresAt(deadline);
         return holds.saveAndFlush(hold);

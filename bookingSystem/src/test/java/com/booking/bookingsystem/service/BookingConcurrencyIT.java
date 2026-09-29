@@ -1,5 +1,10 @@
 package com.booking.bookingsystem.service;
 
+import com.booking.bookingsystem.entity.Doctor;
+import com.booking.bookingsystem.entity.Patient;
+import com.booking.bookingsystem.repository.DoctorRepository;
+import com.booking.bookingsystem.repository.PatientRepository;
+
 import com.booking.bookingsystem.PostgresTestConfiguration;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
@@ -34,6 +39,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 @ActiveProfiles("test")
 @SpringBootTest // Boots the real Spring application context and database for an Integration Test
 class BookingConcurrencyIT {
+    @Autowired DoctorRepository doctors;
+    @Autowired PatientRepository patientsRepository;
+
 
     @Autowired
     private BookingService bookingService;
@@ -56,9 +64,10 @@ class BookingConcurrencyIT {
         // 1. Arrange: Create and save an open slot into the database
         Slot slot = new Slot();
         slot.setStatus(Slot.Status.OPEN);
+        slot.setTimezone("UTC");
         slot.setStartTime(Instant.now().plus(1, ChronoUnit.DAYS));
         slot.setEndTime(Instant.now().plus(1, ChronoUnit.DAYS).plus(1, ChronoUnit.HOURS));
-        slot.setDoctorId(UUID.randomUUID());
+        slot.setDoctorId(doctors.saveAndFlush(new Doctor()).getId());
         Clinic clinic = new Clinic();
         clinic.setName("Concurrency test clinic");
         clinic = clinicRepository.saveAndFlush(clinic);
@@ -78,7 +87,7 @@ class BookingConcurrencyIT {
         // 3. Act: Submit 5 booking tasks to run concurrently
         var tasks = new ArrayList<Future<?>>();
         for (int i = 0; i < threadCount; i++) {
-            UUID patientId = UUID.randomUUID(); // Give each concurrent thread its own fake patient
+            UUID patientId = patientsRepository.saveAndFlush(new Patient()).getId(); // Give each concurrent thread its own fake patient
 
             tasks.add(executorService.submit(() -> {
                 try {
