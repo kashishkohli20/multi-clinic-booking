@@ -1,6 +1,9 @@
 package com.booking.bookingsystem.controller;
 
 import com.booking.bookingsystem.dto.ConfirmationRequest;
+import com.booking.bookingsystem.dto.SlotResponse;
+import com.booking.bookingsystem.dto.HoldResponse;
+import com.booking.bookingsystem.dto.AppointmentResponse;
 import com.booking.bookingsystem.dto.SlotHoldRequest;
 import com.booking.bookingsystem.entity.Appointment;
 import com.booking.bookingsystem.entity.Hold;
@@ -25,24 +28,24 @@ public class BookingController {
     private final BookingService bookingService;
 
     @PostMapping("/slots/hold")
-    public ResponseEntity<Hold> holdSlot(@RequestBody @Valid SlotHoldRequest slotHoldRequest) {
-        UUID slotId = slotHoldRequest.getSlotId();
-        UUID patientId = slotHoldRequest.getPatientId();
+    public ResponseEntity<HoldResponse> holdSlot(@RequestBody @Valid SlotHoldRequest slotHoldRequest) {
+        UUID slotId = slotHoldRequest.slotId();
+        UUID patientId = slotHoldRequest.patientId();
         Hold hold = bookingService.holdSlot(slotId, patientId);
-        return ResponseEntity.status(HttpStatus.CREATED).body(hold);
+        return ResponseEntity.status(HttpStatus.CREATED).body(HoldResponse.from(hold));
     }
 
     @GetMapping("/slots/search")
-    public ResponseEntity<List<Slot>> search(@RequestParam String doctorName) {
+    public ResponseEntity<List<SlotResponse>> search(@RequestParam String doctorName) {
         log.info("Searching for doctor {}", doctorName);
         List<Slot> availableSlots = bookingService.findAvailableSlotsForDoctor(doctorName);
-        return ResponseEntity.ok(availableSlots);
+        return ResponseEntity.ok(availableSlots.stream().map(SlotResponse::from).toList());
     }
 
     @PostMapping("/confirm")
-    public ResponseEntity<Appointment> confirmBooking(@RequestBody @Valid ConfirmationRequest confirmationRequest) {
-        UUID holdId = confirmationRequest.getHoldId();
+    public ResponseEntity<AppointmentResponse> confirmBooking(@RequestBody @Valid ConfirmationRequest confirmationRequest) {
+        UUID holdId = confirmationRequest.holdId();
         Appointment appointment = bookingService.confirmBooking(holdId);
-        return ResponseEntity.status(HttpStatus.CREATED).body(appointment);
+        return ResponseEntity.status(HttpStatus.CREATED).body(AppointmentResponse.from(appointment));
     }
 }

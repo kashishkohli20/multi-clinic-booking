@@ -6,6 +6,12 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import java.util.UUID;
+import java.util.List;
+import java.time.Instant;
+import com.booking.bookingsystem.entity.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import org.springframework.test.json.JsonCompareMode;
 
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -82,5 +88,75 @@ public class BookingControllerTest {
                 .andExpect(jsonPath("$.timestamp").exists())
                 .andExpect(jsonPath("$.message").value(
                         "The reservation changed while processing your request. Check availability and try again."));
+    }
+
+    @Test
+    void search_ReturnsOnlyPublicSlotFields() throws Exception {
+        Clinic clinic = new Clinic();
+        clinic.setId(UUID.randomUUID());
+        clinic.setDescription("Internal clinic metadata");
+        Slot slot = new Slot();
+        slot.setId(UUID.randomUUID());
+        slot.setDoctorId(UUID.randomUUID());
+        slot.setClinic(clinic);
+        slot.setStartTime(Instant.parse("2026-10-01T00:00:00Z"));
+        slot.setEndTime(Instant.parse("2026-10-01T01:00:00Z"));
+        slot.setTimezone("Australia/Melbourne");
+        slot.setStatus(Slot.Status.OPEN);
+        slot.setVersion(7L);
+        slot.setCreatedAt(Instant.now());
+        when(bookingService.findAvailableSlotsForDoctor("Dr Smith")).thenReturn(List.of(slot));
+
+        mockMvc.perform(get("/api/v1/slots/search").param("doctorName", "Dr Smith"))
+                .andExpect(status().isOk())
+                .andExpect(content().json("""
+                        [{"id":"%s","doctorId":"%s","clinicId":"%s",
+                          "startTime":"2026-10-01T00:00:00Z","endTime":"2026-10-01T01:00:00Z",
+                          "timezone":"Australia/Melbourne","status":"OPEN"}]
+                        """.formatted(slot.getId(), slot.getDoctorId(), clinic.getId()), JsonCompareMode.STRICT));
+    }
+
+    @Test
+    void hold_ReturnsOnlyPublicHoldFields() throws Exception {
+        Hold hold = new Hold();
+        hold.setId(UUID.randomUUID());
+        hold.setSlotId(UUID.randomUUID());
+        hold.setHoldById(UUID.randomUUID());
+        hold.setStatus(Hold.Status.ACTIVE);
+        hold.setExpiresAt(Instant.parse("2026-10-01T00:00:30Z"));
+        hold.setVersion(3L);
+        hold.setCreatedAt(Instant.now());
+        when(bookingService.holdSlot(hold.getSlotId(), hold.getHoldById())).thenReturn(hold);
+
+        mockMvc.perform(post("/api/v1/slots/hold").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"slotId\":\"%s\",\"patientId\":\"%s\"}"
+                                .formatted(hold.getSlotId(), hold.getHoldById())))
+                .andExpect(status().isCreated())
+                .andExpect(content().json("""
+                        {"id":"%s","slotId":"%s","holdById":"%s","status":"ACTIVE",
+                         "expiresAt":"2026-10-01T00:00:30Z"}
+                        """.formatted(hold.getId(), hold.getSlotId(), hold.getHoldById()), JsonCompareMode.STRICT));
+    }
+
+    @Test
+    void confirm_ReturnsOnlyPublicAppointmentFields() throws Exception {
+        UUID holdId = UUID.randomUUID();
+        Appointment appointment = new Appointment();
+        appointment.setId(UUID.randomUUID());
+        appointment.setBookedSlotId(UUID.randomUUID());
+        appointment.setPatientId(UUID.randomUUID());
+        appointment.setBookedById(appointment.getPatientId());
+        appointment.setStatus(Appointment.Status.CONFIRMED);
+        appointment.setCreatedAt(Instant.now());
+        when(bookingService.confirmBooking(holdId)).thenReturn(appointment);
+
+        mockMvc.perform(post("/api/v1/confirm").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"holdId\":\"%s\"}".formatted(holdId)))
+                .andExpect(status().isCreated())
+                .andExpect(content().json("""
+                        {"id":"%s","bookedSlotId":"%s","patientId":"%s","bookedById":"%s",
+                         "status":"CONFIRMED"}
+                        """.formatted(appointment.getId(), appointment.getBookedSlotId(),
+                        appointment.getPatientId(), appointment.getBookedById()), JsonCompareMode.STRICT));
     }
 }
