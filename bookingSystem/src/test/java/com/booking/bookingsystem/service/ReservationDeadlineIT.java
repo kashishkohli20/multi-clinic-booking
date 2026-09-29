@@ -1,5 +1,9 @@
 package com.booking.bookingsystem.service;
 
+import com.booking.bookingsystem.PostgresTestConfiguration;
+import org.springframework.context.annotation.Import;
+import org.springframework.test.context.ActiveProfiles;
+
 import com.booking.bookingsystem.entity.*;
 import com.booking.bookingsystem.repository.*;
 import com.booking.bookingsystem.config.ReservationConfiguration;
@@ -11,6 +15,8 @@ import java.time.*;
 import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.*;
 
+@Import(PostgresTestConfiguration.class)
+@ActiveProfiles("test")
 @SpringBootTest
 @Transactional
 class ReservationDeadlineIT {

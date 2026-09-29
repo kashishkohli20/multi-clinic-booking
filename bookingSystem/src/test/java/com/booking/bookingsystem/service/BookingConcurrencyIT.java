@@ -1,5 +1,9 @@
 package com.booking.bookingsystem.service;
 
+import com.booking.bookingsystem.PostgresTestConfiguration;
+import org.springframework.context.annotation.Import;
+import org.springframework.test.context.ActiveProfiles;
+
 import com.booking.bookingsystem.entity.Clinic;
 import com.booking.bookingsystem.entity.Hold;
 import com.booking.bookingsystem.repository.HoldRepository;
@@ -26,6 +30,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+@Import(PostgresTestConfiguration.class)
+@ActiveProfiles("test")
 @SpringBootTest // Boots the real Spring application context and database for an Integration Test
 class BookingConcurrencyIT {
 

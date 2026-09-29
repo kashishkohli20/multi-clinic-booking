@@ -1,0 +1,3 @@
+# Connection details come exclusively from the Testcontainers service connection.
+booking:
+  seed-data: false

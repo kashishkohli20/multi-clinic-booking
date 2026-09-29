@@ -1,0 +1,12 @@
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/booking}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+
+booking:
+  seed-data: ${BOOKING_SEED_DATA:true}
+
+logging:
+  level:
+    com.booking.bookingsystem: DEBUG

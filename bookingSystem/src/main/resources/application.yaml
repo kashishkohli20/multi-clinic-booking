@@ -1,37 +1,19 @@
 spring:
   application:
     name: bookingSystem
-  h2:
-    console:
-      enabled: true
-  datasource:
-    url: "jdbc:h2:mem:testdb"
   jpa:
-    show-sql: false # only for debugging purpose, not in production
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
     properties:
       hibernate:
-        format_sql: true  # only for debugging purpose, not in production
-  #    hibernate:
-  #      ddl-auto: none, create-drop, update
-
-logging:
-  level:
-    org:
-      springframework:
-        security: DEBUG
-      hibernate:
-        SQL: DEBUG
-    security:
-      securitydemo: DEBUG
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
 
 server:
   port: 8080
-  error:
-    include-message: always
-    include-binding-errors: always
-
-project:
-  image: images/
 
 booking:
   hold-duration: ${BOOKING_HOLD_DURATION:30s}

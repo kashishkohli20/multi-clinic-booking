@@ -12,11 +12,16 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 
 @Configuration
+@Profile("dev")
+@ConditionalOnProperty(name = "booking.seed-data", havingValue = "true")
 @RequiredArgsConstructor
 @Slf4j
 public class DataSeeder implements CommandLineRunner {
@@ -27,6 +32,7 @@ public class DataSeeder implements CommandLineRunner {
     private final ClinicRepository clinicRepository;
 
     @Override
+    @Transactional
     public void run(String... args) throws Exception {
         if (doctorRepository.count() > 0) {
             log.info("Database already seeded with doctors. Skipping initialization.");

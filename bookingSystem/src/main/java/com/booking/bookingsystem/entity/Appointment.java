@@ -35,7 +35,7 @@ public class Appointment {
     private Status status;
 
     @Column(name = "canceled_by_id")
-    private String canceledBy;
+    private UUID canceledBy;
 
     private String canceledReason;
 
