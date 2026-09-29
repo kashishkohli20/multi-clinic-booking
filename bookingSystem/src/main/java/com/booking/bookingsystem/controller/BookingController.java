@@ -36,7 +36,7 @@ public class BookingController {
     }
 
     @PostMapping("/slots/hold")
-    public ResponseEntity<Hold> holdSlot(@RequestBody SlotHoldRequest slotHoldRequest) {
+    public ResponseEntity<Hold> holdSlot(@RequestBody @Valid SlotHoldRequest slotHoldRequest) {
         UUID slotId = slotHoldRequest.getSlotId();
         UUID patientId = slotHoldRequest.getPatientId();
         Hold hold = bookingService.holdSlot(slotId, patientId);
@@ -51,7 +51,7 @@ public class BookingController {
     }
 
     @PostMapping("/confirm")
-    public ResponseEntity<Appointment> confirmBooking(@RequestBody ConfirmationRequest confirmationRequest) {
+    public ResponseEntity<Appointment> confirmBooking(@RequestBody @Valid ConfirmationRequest confirmationRequest) {
         UUID holdId = confirmationRequest.getHoldId();
         Appointment appointment = bookingService.confirmBooking(holdId);
         return ResponseEntity.status(HttpStatus.CREATED).body(appointment);
