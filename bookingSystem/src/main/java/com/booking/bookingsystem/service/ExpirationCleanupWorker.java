@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.Clock;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -22,6 +23,7 @@ public class ExpirationCleanupWorker {
 
     private final HoldRepository holdRepository;
     private final SlotRepository slotRepository;
+    private final Clock clock;
 
     /**
      * Wakes up at a fixed interval to sweep and clean expired slot holds.
@@ -30,10 +32,10 @@ public class ExpirationCleanupWorker {
     @Scheduled(fixedDelay = 10000)
     @Transactional // Ensures the entire sweep-and-release operation is atomic
     public void cleanupExpiredHolds() {
-        Instant now = Instant.now();
+        Instant now = clock.instant();
 
         // 1. Fetch all active holds that have passed their expiration timestamp
-        List<Hold> expiredHolds = holdRepository.findByStatusAndExpiresAtBefore(Hold.Status.ACTIVE, now);
+        List<Hold> expiredHolds = holdRepository.findByStatusAndExpiresAtLessThanEqual(Hold.Status.ACTIVE, now);
 
         if (expiredHolds.isEmpty()) {
             return; // Exit early if there is nothing to clean up

@@ -8,6 +8,8 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -21,6 +23,8 @@ public class BookingService {
     private final HoldRepository holdRepository;
     private final DoctorRepository doctorRepository;
     private final AppointmentRepository appointmentRepository;
+    private final Clock clock;
+    private final Duration holdDuration;
 
     @Transactional
     public Hold holdSlot(UUID slotId, UUID holdById) {
@@ -31,14 +35,21 @@ public class BookingService {
             throw new SlotUnavailableException("Slot is not open");
         }
 
+        Instant now = clock.instant();
+        if (!slot.getStartTime().isAfter(now)) {
+            throw new SlotUnavailableException("The slot has already started.");
+        }
+
         slot.setStatus(Slot.Status.HELD);
         slotRepository.save(slot);
+
+        Instant expiresAt = now.plus(holdDuration);
 
         Hold hold = new Hold();
         hold.setSlotId(slotId);
         hold.setStatus(Hold.Status.ACTIVE);
         hold.setHoldById(holdById);
-        hold.setExpiresAt(Instant.now().plusSeconds(30));
+        hold.setExpiresAt(expiresAt);
         holdRepository.save(hold);
 
         return hold;
@@ -66,7 +77,8 @@ public class BookingService {
             throw new SlotUnavailableException("This reservation cannot be confirmed because its status is: " + hold.getStatus());
         }
 
-        if (hold.getExpiresAt().isBefore(Instant.now())) {
+        Instant now = clock.instant();
+        if (!hold.getExpiresAt().isAfter(now)) {
             throw new SlotUnavailableException("This reservation hold has already expired.");
         }
 

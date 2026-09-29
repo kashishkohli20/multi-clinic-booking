@@ -8,6 +8,6 @@ import java.util.List;
 import java.util.UUID;
 
 public interface HoldRepository extends JpaRepository<Hold, UUID> {
-    // Spring generates: SELECT * FROM hold WHERE status = ? AND expires_at < ?
-    List<Hold> findByStatusAndExpiresAtBefore(Hold.Status status, Instant time);
+    // Spring generates: SELECT * FROM hold WHERE status = ? AND expires_at <= ?
+    List<Hold> findByStatusAndExpiresAtLessThanEqual(Hold.Status status, Instant time);
 }
