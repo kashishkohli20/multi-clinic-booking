@@ -4,6 +4,7 @@ import com.booking.bookingsystem.entity.Slot;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
+import java.time.Instant;
 import java.util.UUID;
 
 public interface SlotRepository extends JpaRepository<Slot, UUID> {
@@ -11,5 +12,6 @@ public interface SlotRepository extends JpaRepository<Slot, UUID> {
     List<Slot> findByIdIn(List<UUID> ids);
 
     // Finds all OPEN slots belonging to a specific doctor
-    List<Slot> findByDoctorIdAndStatus(UUID doctorId, Slot.Status status);
+    List<Slot> findByDoctorIdInAndStatusAndStartTimeAfterOrderByStartTimeAscIdAsc(
+            List<UUID> doctorIds, Slot.Status status, Instant now);
 }

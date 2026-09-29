@@ -167,4 +167,59 @@ class BookingHttpConcurrencyIT {
         assertEquals(Slot.Status.OPEN, slots.findById(slot.getId()).orElseThrow().getStatus());
         assertEquals(0, holds.findAll().stream().filter(h -> slot.getId().equals(h.getSlotId())).count());
     }
+
+    private JsonNode search(HttpClient client, String name) throws Exception {
+        var response = client.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port
+                + "/api/v1/slots/search?doctorName=" + name)).timeout(Duration.ofSeconds(15)).GET().build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, response.statusCode(), response.body());
+        return json.readTree(response.body());
+    }
+
+    @Test
+    void searchHoldConfirmWorksWithoutAssistantAndFiltersUnavailableSlots() throws Exception {
+        String name = "Doctor" + UUID.randomUUID().toString().replace("-", "");
+        Doctor doctor = doctors.findById(slot.getDoctorId()).orElseThrow();
+        doctor.setName(name);
+        doctors.saveAndFlush(doctor);
+        Doctor other = new Doctor();
+        other.setName(name);
+        other = doctors.saveAndFlush(other);
+        Slot later = new Slot();
+        later.setClinic(slot.getClinic());
+        later.setDoctorId(other.getId());
+        later.setTimezone("UTC");
+        later.setStatus(Slot.Status.OPEN);
+        later.setStartTime(NOW.plusSeconds(10800));
+        later.setEndTime(NOW.plusSeconds(14400));
+        later = slots.saveAndFlush(later);
+        for (long offset : new long[] {-3600, 0}) {
+            Slot past = new Slot();
+            past.setClinic(slot.getClinic());
+            past.setDoctorId(doctor.getId());
+            past.setTimezone("UTC");
+            past.setStatus(Slot.Status.OPEN);
+            past.setStartTime(NOW.plusSeconds(offset));
+            past.setEndTime(NOW.plusSeconds(offset + 1800));
+            slots.saveAndFlush(past);
+        }
+        UUID patient = patientsRepository.saveAndFlush(new Patient()).getId();
+        try (HttpClient client = HttpClient.newHttpClient()) {
+            JsonNode results = search(client, name);
+            assertEquals(2, results.size());
+            assertEquals(slot.getId().toString(), results.get(0).get("id").asText());
+            assertEquals(later.getId().toString(), results.get(1).get("id").asText());
+            var held = client.send(request("/slots/hold", "{\"slotId\":\"%s\",\"patientId\":\"%s\"}"
+                    .formatted(results.get(0).get("id").asText(), patient)), HttpResponse.BodyHandlers.ofString());
+            assertEquals(201, held.statusCode(), held.body());
+            assertEquals(1, search(client, name).size());
+            UUID holdId = UUID.fromString(json.readTree(held.body()).get("id").asText());
+            var confirmed = client.send(request("/confirm", "{\"holdId\":\"%s\"}".formatted(holdId)),
+                    HttpResponse.BodyHandlers.ofString());
+            assertEquals(201, confirmed.statusCode(), confirmed.body());
+            assertEquals(1, search(client, name).size());
+            assertEquals(Slot.Status.BOOKED, slots.findById(slot.getId()).orElseThrow().getStatus());
+            assertEquals(Hold.Status.CONFIRMED, holds.findById(holdId).orElseThrow().getStatus());
+        }
+    }
 }

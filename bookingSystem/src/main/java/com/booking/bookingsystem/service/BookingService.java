@@ -11,7 +11,6 @@ import org.springframework.stereotype.Service;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -61,15 +60,12 @@ public class BookingService {
     }
 
     public List<Slot> findAvailableSlotsForDoctor(String doctorName) {
-        Doctor doctor = doctorRepository.findByNameContainingIgnoreCase(doctorName).orElseThrow(() -> new ResourceNotFoundException("Doctor not found"));
-
-        List<Slot> slots = new ArrayList<>();
-        List<Slot> openSlots = slotRepository.findByDoctorIdAndStatus(doctor.getId(), Slot.Status.OPEN);
-        List<Slot> bookedSlots = slotRepository.findByDoctorIdAndStatus(doctor.getId(), Slot.Status.BOOKED);
-        slots.addAll(openSlots);
-        slots.addAll(bookedSlots);
-        return openSlots;
-//        return slots;
+        List<Doctor> doctors = doctorRepository.findByNameContainingIgnoreCase(doctorName);
+        if (doctors.isEmpty()) {
+            throw new ResourceNotFoundException("Doctor not found");
+        }
+        return slotRepository.findByDoctorIdInAndStatusAndStartTimeAfterOrderByStartTimeAscIdAsc(
+                doctors.stream().map(Doctor::getId).toList(), Slot.Status.OPEN, clock.instant());
     }
 
     @Transactional

@@ -16,7 +16,9 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.time.LocalDate;
+import java.time.Clock;
+import com.booking.bookingsystem.service.BookingService;
 import java.time.ZoneId;
 
 @Configuration
@@ -26,6 +28,8 @@ import java.time.ZoneId;
 @Slf4j
 public class DataSeeder implements CommandLineRunner {
 
+    private final Clock clock;
+    private final BookingService bookingService;
     private final DoctorRepository doctorRepository;
     private final SlotRepository slotRepository;
     private final PatientRepository patientRepository;
@@ -67,6 +71,8 @@ public class DataSeeder implements CommandLineRunner {
         docklandsClinic = clinicRepository.save(docklandsClinic);
         log.info("Seeded Clinic: {} with ID: {}", docklandsClinic.getName(), docklandsClinic.getId());
 
+        LocalDate tomorrow = LocalDate.now(clock.withZone(ZoneId.of("Australia/Sydney"))).plusDays(1);
+
         // 3. Create and persist an OPEN Slot for this Doctor (Scheduled for tomorrow at 10:00 AM)
         Slot openSlot = new Slot();
         openSlot.setDoctorId(doctor.getId()); // Perfectly maps the newly generated UUID!
@@ -76,12 +82,12 @@ public class DataSeeder implements CommandLineRunner {
         ZoneId slotZone = ZoneId.of(openSlot.getTimezone());
 
         openSlot.setStartTime(
-                LocalDateTime.now(slotZone).plusDays(1).withHour(10).withMinute(0).withSecond(0).withNano(0)
+                tomorrow.atTime(10, 0)
                         .atZone(slotZone)
                         .toInstant()
         );
         openSlot.setEndTime(
-                LocalDateTime.now(slotZone).plusDays(1).withHour(11).withMinute(0).withSecond(0).withNano(0)
+                tomorrow.atTime(11, 0)
                 .atZone(slotZone)
                 .toInstant());
         slotRepository.save(openSlot);
@@ -90,20 +96,22 @@ public class DataSeeder implements CommandLineRunner {
         // 4. Create and persist an already BOOKED Slot to test filtering rules
         Slot bookedSlot = new Slot();
         bookedSlot.setDoctorId(doctor.getId());
-        bookedSlot.setStatus(Slot.Status.BOOKED);
-        bookedSlot.setClinic(southbankClinic);
+        bookedSlot.setStatus(Slot.Status.OPEN);
+        bookedSlot.setClinic(docklandsClinic);
         bookedSlot.setTimezone("Australia/Sydney");
         ZoneId bookedSlotZone = ZoneId.of(bookedSlot.getTimezone());
 
         bookedSlot.setStartTime(
-                LocalDateTime.now().plusDays(1).withHour(14).withMinute(0).withSecond(0).withNano(0)
+                tomorrow.atTime(14, 0)
                         .atZone(bookedSlotZone)
                         .toInstant());
         bookedSlot.setEndTime(
-                LocalDateTime.now().plusDays(1).withHour(15).withMinute(0).withSecond(0).withNano(0)
+                tomorrow.atTime(15, 0)
                         .atZone(bookedSlotZone)
                         .toInstant());
-        slotRepository.save(bookedSlot);
+        bookedSlot = slotRepository.save(bookedSlot);
+        var hold = bookingService.holdSlot(bookedSlot.getId(), patient.getId());
+        bookingService.confirmBooking(hold.getId());
         log.info("Seeded BOOKED Slot for tomorrow at 2:00 PM (Should be filtered out by search queries)");
 
         log.info("Data seeding completed successfully!");
