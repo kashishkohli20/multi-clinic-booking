@@ -23,6 +23,7 @@ public class BookingService {
     private final HoldRepository holdRepository;
     private final DoctorRepository doctorRepository;
     private final AppointmentRepository appointmentRepository;
+    private final PatientRepository patientRepository;
     private final Clock clock;
     private final Duration holdDuration;
 
@@ -38,6 +39,10 @@ public class BookingService {
         Instant now = clock.instant();
         if (!slot.getStartTime().isAfter(now)) {
             throw new SlotUnavailableException("The slot has already started.");
+        }
+
+        if (!patientRepository.existsById(holdById)) {
+            throw new ResourceNotFoundException("Patient not found");
         }
 
         slot.setStatus(Slot.Status.HELD);
