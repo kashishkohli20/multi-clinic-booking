@@ -1,103 +1,85 @@
 package com.booking.bookingsystem.service;
 
-import com.booking.bookingsystem.entity.Appointment;
-import com.booking.bookingsystem.entity.Clinic;
-import com.booking.bookingsystem.entity.Slot;
-import com.booking.bookingsystem.repository.AppointmentRepository;
-import com.booking.bookingsystem.repository.ClinicRepository;
-import com.booking.bookingsystem.repository.SlotRepository;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
+import com.booking.bookingsystem.entity.*;
+import com.booking.bookingsystem.repository.*;
+import com.booking.bookingsystem.service.exception.SlotUnavailableException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import com.booking.bookingsystem.service.exception.SlotUnavailableException;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-public class BookingServiceTest {
-    @Mock
-    private SlotRepository slotRepository;
-    @Mock
-    private AppointmentRepository appointmentRepository;
-    @Mock
-    private ClinicRepository clinicRepository;
-
-    @InjectMocks
-    private BookingService bookingService;
-
-    private UUID slotId;
-    private UUID clinicId;
-    private UUID patientId;
-    private Slot mockSlot;
-    private Clinic mockClinic;
-
-    @BeforeEach
-    public void setup() {
-        slotId = UUID.randomUUID();
-        clinicId = UUID.randomUUID();
-        patientId = UUID.randomUUID();
-
-        mockSlot = new Slot();
-        mockClinic = new Clinic();
-
-        mockClinic.setId(clinicId);
-        mockSlot.setId(slotId);
-        mockSlot.setClinic(mockClinic);
-        mockSlot.setStatus(Slot.Status.OPEN);
-    }
+class BookingServiceTest {
+    @Mock private SlotRepository slotRepository;
+    @Mock private HoldRepository holdRepository;
+    @Mock private AppointmentRepository appointmentRepository;
+    @InjectMocks private BookingService bookingService;
 
     @Test
-    @DisplayName("Should successfully book an appointment when slot is OPEN")
-    void bookSlot_Success() {
+    void holdSlot_CreatesHoldWithoutAppointment() {
+        UUID slotId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+        Slot slot = new Slot();
+        slot.setId(slotId);
+        slot.setStatus(Slot.Status.OPEN);
+        when(slotRepository.findById(slotId)).thenReturn(Optional.of(slot));
 
-        when(clinicRepository.findById(clinicId)).thenReturn(Optional.of(mockClinic));
+        Hold hold = bookingService.holdSlot(slotId, patientId);
 
-        when(slotRepository.findById(slotId)).thenReturn(Optional.of(mockSlot));
-        when(slotRepository.save(mockSlot)).thenReturn(mockSlot);
-
-        when(appointmentRepository.save(any(Appointment.class))).thenAnswer(invocation -> {
-            Appointment appt = invocation.getArgument(0);
-            appt.setId(UUID.randomUUID());
-            return appt;
-        });
-
-        Appointment appointment = bookingService.bookSlot(slotId, UUID.fromString(clinicId.toString()), patientId);
-
-        assertNotNull(appointment);
-        assertEquals(slotId, appointment.getBookedSlotId());
-        assertEquals(Slot.Status.BOOKED, mockSlot.getStatus());
-        assertEquals(Appointment.Status.CONFIRMED, appointment.getStatus());
-        assertEquals(patientId, appointment.getPatientId());
-
-        verify(slotRepository, times(1)).save(mockSlot);
-        verify(appointmentRepository, times(1)).save(any(Appointment.class));
-
-    }
-
-    @Test
-    void bookSlot_ClinicMismatch_DoesNotChangeSlotOrSaveAppointment() {
-        UUID otherClinicId = UUID.randomUUID();
-        Clinic otherClinic = new Clinic();
-        otherClinic.setId(otherClinicId);
-        when(slotRepository.findById(slotId)).thenReturn(Optional.of(mockSlot));
-        when(clinicRepository.findById(otherClinicId)).thenReturn(Optional.of(otherClinic));
-
-        assertThrows(SlotUnavailableException.class,
-                () -> bookingService.bookSlot(slotId, otherClinicId, patientId));
-
-        assertEquals(Slot.Status.OPEN, mockSlot.getStatus());
-        verify(slotRepository, never()).save(any(Slot.class));
+        assertEquals(slotId, hold.getSlotId());
+        assertEquals(patientId, hold.getHoldById());
+        assertEquals(Hold.Status.ACTIVE, hold.getStatus());
+        assertEquals(Slot.Status.HELD, slot.getStatus());
+        verify(holdRepository).save(hold);
         verifyNoInteractions(appointmentRepository);
+    }
+
+    @Test
+    void confirmBooking_CreatesAppointmentFromActiveHold() {
+        UUID holdId = UUID.randomUUID();
+        Slot slot = new Slot();
+        slot.setId(UUID.randomUUID());
+        slot.setStatus(Slot.Status.HELD);
+        Hold hold = new Hold();
+        hold.setId(holdId);
+        hold.setSlotId(slot.getId());
+        hold.setHoldById(UUID.randomUUID());
+        hold.setStatus(Hold.Status.ACTIVE);
+        hold.setExpiresAt(Instant.now().plusSeconds(300));
+        when(holdRepository.findById(holdId)).thenReturn(Optional.of(hold));
+        when(slotRepository.findById(slot.getId())).thenReturn(Optional.of(slot));
+        when(appointmentRepository.save(any(Appointment.class))).thenAnswer(i -> i.getArgument(0));
+
+        Appointment appointment = bookingService.confirmBooking(holdId);
+
+        assertEquals(slot.getId(), appointment.getBookedSlotId());
+        assertEquals(hold.getHoldById(), appointment.getPatientId());
+        assertEquals(Appointment.Status.CONFIRMED, appointment.getStatus());
+        assertEquals(Hold.Status.CONFIRMED, hold.getStatus());
+        assertEquals(Slot.Status.BOOKED, slot.getStatus());
+        verify(holdRepository).save(hold);
+        verify(slotRepository).save(slot);
+    }
+
+    @Test
+    void confirmBooking_ExpiredHoldCreatesNoAppointment() {
+        UUID holdId = UUID.randomUUID();
+        Hold hold = new Hold();
+        hold.setStatus(Hold.Status.ACTIVE);
+        hold.setExpiresAt(Instant.now().minusSeconds(60));
+        when(holdRepository.findById(holdId)).thenReturn(Optional.of(hold));
+
+        assertThrows(SlotUnavailableException.class, () -> bookingService.confirmBooking(holdId));
+        verifyNoInteractions(slotRepository, appointmentRepository);
+        verify(holdRepository, never()).save(any());
     }
 }

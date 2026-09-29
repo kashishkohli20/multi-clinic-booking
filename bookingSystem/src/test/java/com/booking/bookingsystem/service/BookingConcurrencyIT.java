@@ -1,6 +1,12 @@
 package com.booking.bookingsystem.service;
 
 import com.booking.bookingsystem.entity.Clinic;
+import com.booking.bookingsystem.entity.Hold;
+import com.booking.bookingsystem.repository.HoldRepository;
+import com.booking.bookingsystem.repository.AppointmentRepository;
+import java.util.ArrayList;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import com.booking.bookingsystem.entity.Slot;
 import com.booking.bookingsystem.repository.SlotRepository;
 import com.booking.bookingsystem.repository.ClinicRepository;
@@ -32,9 +38,15 @@ class BookingConcurrencyIT {
     @Autowired
     private ClinicRepository clinicRepository;
 
+    @Autowired
+    private HoldRepository holdRepository;
+
+    @Autowired
+    private AppointmentRepository appointmentRepository;
+
     @Test
-    @DisplayName("Should only allow one user to book a slot when multiple requests land simultaneously")
-    void verifyOptimisticLocking_UnderConcurrentLoad() throws InterruptedException {
+    @DisplayName("Should only allow one user to hold a slot when multiple requests land simultaneously")
+    void verifyOptimisticLocking_UnderConcurrentLoad() throws Exception {
         // 1. Arrange: Create and save an open slot into the database
         Slot slot = new Slot();
         slot.setStatus(Slot.Status.OPEN);
@@ -48,7 +60,6 @@ class BookingConcurrencyIT {
         slot = slotRepository.saveAndFlush(slot);
 
         UUID targetSlotId = slot.getId();
-        UUID clinicId = clinic.getId();
 
         // 2. Setup Multi-threading tools
         int threadCount = 5;
@@ -59,36 +70,45 @@ class BookingConcurrencyIT {
         AtomicInteger failureCount = new AtomicInteger(0);
 
         // 3. Act: Submit 5 booking tasks to run concurrently
+        var tasks = new ArrayList<Future<?>>();
         for (int i = 0; i < threadCount; i++) {
             UUID patientId = UUID.randomUUID(); // Give each concurrent thread its own fake patient
 
-            executorService.submit(() -> {
+            tasks.add(executorService.submit(() -> {
                 try {
                     latch.await(); // Wait here until the gate opens to ensure they all strike at once
-                    bookingService.bookSlot(targetSlotId, clinicId, patientId);
+                    bookingService.holdSlot(targetSlotId, patientId);
                     successCount.incrementAndGet();
                 } catch (SlotUnavailableException | org.springframework.orm.ObjectOptimisticLockingFailureException e) {
                     failureCount.incrementAndGet();
                 } catch (Exception e) {
-                    e.printStackTrace();
+                    throw new RuntimeException(e);
                 }
-            });
+            }));
         }
 
-        latch.countDown(); // Open the gate! All threads execute bookSlot() simultaneously
+        latch.countDown(); // Open the gate! All threads execute holdSlot() simultaneously
         executorService.shutdown();
 
         // Wait for all threads to finish processing
-        while (!executorService.isTerminated()) {
-            Thread.sleep(10);
+        try {
+            for (Future<?> task : tasks) {
+                task.get(15, TimeUnit.SECONDS);
+            }
+        } finally {
+            executorService.shutdownNow();
         }
 
         // 4. Assertions: Out of 5 concurrent requests, exactly 1 must succeed, and 4 must fail
-        assertEquals(1, successCount.get(), "Exactly one booking should succeed.");
+        assertEquals(1, successCount.get(), "Exactly one hold should succeed.");
         assertEquals(4, failureCount.get(), "Four threads should have been rejected by locking rules.");
 
         // Check database state to ensure it didn't get corrupted
         Slot updatedSlot = slotRepository.findById(targetSlotId).orElseThrow();
-        assertEquals(Slot.Status.BOOKED, updatedSlot.getStatus());
+        assertEquals(Slot.Status.HELD, updatedSlot.getStatus());
+        assertEquals(1, holdRepository.findAll().stream()
+                .filter(h -> targetSlotId.equals(h.getSlotId()) && h.getStatus() == Hold.Status.ACTIVE).count());
+        assertEquals(0, appointmentRepository.findAll().stream()
+                .filter(a -> targetSlotId.equals(a.getBookedSlotId())).count());
     }
 }
