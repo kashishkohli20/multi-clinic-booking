@@ -96,6 +96,18 @@ class BookingConcurrencyIT {
                     successCount.incrementAndGet();
                 } catch (SlotUnavailableException | org.springframework.orm.ObjectOptimisticLockingFailureException e) {
                     failureCount.incrementAndGet();
+                } catch (org.springframework.dao.DataIntegrityViolationException e) {
+                    Throwable cause = e;
+                    while (cause != null && !(cause instanceof org.hibernate.exception.ConstraintViolationException)) {
+                        cause = cause.getCause();
+                    }
+                    if (cause instanceof org.hibernate.exception.ConstraintViolationException violation
+                            && "uq_hold_active_slot".equals(violation.getConstraintName())
+                            && "23505".equals(violation.getSQLState())) {
+                        failureCount.incrementAndGet();
+                    } else {
+                        throw e;
+                    }
                 } catch (Exception e) {
                     throw new RuntimeException(e);
                 }

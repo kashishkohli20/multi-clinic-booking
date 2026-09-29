@@ -159,4 +159,35 @@ public class BookingControllerTest {
                         """.formatted(appointment.getId(), appointment.getBookedSlotId(),
                         appointment.getPatientId(), appointment.getBookedById()), JsonCompareMode.STRICT));
     }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"uq_hold_active_slot", "uq_appointment_confirmed_slot"})
+    void reservationUniquenessViolationReturns409(String constraint) throws Exception {
+        UUID holdId = UUID.randomUUID();
+        var databaseFailure = new org.hibernate.exception.ConstraintViolationException(
+                "private database details", new java.sql.SQLException("duplicate", "23505"), constraint);
+        when(bookingService.confirmBooking(holdId)).thenThrow(
+                new org.springframework.dao.DataIntegrityViolationException("private SQL", databaseFailure));
+        mockMvc.perform(post("/api/v1/confirm").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"holdId\":\"%s\"}".formatted(holdId)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value(409))
+                .andExpect(jsonPath("$.path").value("/api/v1/confirm"))
+                .andExpect(jsonPath("$.message").value(
+                        "The slot already has an active reservation or confirmed appointment."));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"fk_hold_hold_by_id", "some_other_unique_constraint"})
+    void unrelatedIntegrityViolationIsNotReportedAsBookingConflict(String constraint) throws Exception {
+        UUID holdId = UUID.randomUUID();
+        var failure = new org.hibernate.exception.ConstraintViolationException(
+                "private database details", new java.sql.SQLException("failure", "23505"), constraint);
+        when(bookingService.confirmBooking(holdId)).thenThrow(
+                new org.springframework.dao.DataIntegrityViolationException("private SQL", failure));
+        mockMvc.perform(post("/api/v1/confirm").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"holdId\":\"%s\"}".formatted(holdId)))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.message").value("Unable to complete the request."));
+    }
 }

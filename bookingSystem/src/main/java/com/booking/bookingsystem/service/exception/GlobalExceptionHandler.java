@@ -13,7 +13,12 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.hibernate.exception.ConstraintViolationException;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -72,5 +77,27 @@ public class GlobalExceptionHandler {
                 request.getRequestURI()
         );
         return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiErrorResponse> handleDataIntegrity(
+            DataIntegrityViolationException ex, HttpServletRequest request) {
+        Set<String> reservationConstraints = Set.of(
+                "uq_hold_active_slot", "uq_appointment_confirmed_slot");
+        for (Throwable cause = ex; cause != null; cause = cause.getCause()) {
+            if (cause instanceof ConstraintViolationException violation
+                    && "23505".equals(violation.getSQLState())
+                    && violation.getConstraintName() != null
+                    && reservationConstraints.contains(violation.getConstraintName())) {
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiErrorResponse(
+                        Instant.now(), 409, "Conflict",
+                        "The slot already has an active reservation or confirmed appointment.",
+                        request.getRequestURI()));
+            }
+        }
+        log.error("Unexpected database integrity failure at {}", request.getRequestURI(), ex);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ApiErrorResponse(
+                Instant.now(), 500, "Internal Server Error", "Unable to complete the request.",
+                request.getRequestURI()));
     }
 }
