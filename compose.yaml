@@ -6,7 +6,7 @@ services:
       POSTGRES_USER: ${DB_USERNAME:?Set DB_USERNAME}
       POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
     ports:
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -14,6 +14,29 @@ services:
       interval: 5s
       timeout: 5s
       retries: 12
+
+  booking-service:
+    build:
+      context: ./bookingSystem
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      DB_URL: jdbc:postgresql://postgres:5432/booking
+      DB_USERNAME: ${DB_USERNAME:?Set DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+      BOOKING_SEED_DATA: ${BOOKING_SEED_DATA:-true}
+      BOOKING_HOLD_DURATION: ${BOOKING_HOLD_DURATION:-30s}
+    ports:
+      - "127.0.0.1:${APP_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8080/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    stop_grace_period: 30s
 
 volumes:
   postgres-data:

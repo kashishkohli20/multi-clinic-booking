@@ -17,3 +17,12 @@ server:
 
 booking:
   hold-duration: ${BOOKING_HOLD_DURATION:30s}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
