@@ -24,7 +24,8 @@ public class AppUser {
 
     private String email;
 
-    private String password;
+    @Column(name = "password_hash")
+    private String passwordHash;
 
     @CreationTimestamp
     private Instant createdAt;
