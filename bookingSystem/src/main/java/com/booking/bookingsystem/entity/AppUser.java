@@ -1,6 +1,7 @@
 package com.booking.bookingsystem.entity;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
@@ -22,6 +23,8 @@ public class AppUser {
 
     private String name;
 
+    @NotBlank
+    @Column(nullable = false)
     private String email;
 
     @Column(name = "password_hash")

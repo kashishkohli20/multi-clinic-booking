@@ -30,7 +30,7 @@ class ProductionProfileIT {
         assertEquals("9090", environment.getProperty("server.port"));
         assertEquals("validate", environment.getProperty("spring.jpa.hibernate.ddl-auto"));
         assertEquals("never", environment.getProperty("server.error.include-message"));
-        assertEquals(4, jdbc.queryForObject(
+        assertEquals(5, jdbc.queryForObject(
                 "select count(*) from flyway_schema_history where success", Integer.class));
         assertEquals(0, jdbc.queryForObject("select count(*) from patient", Integer.class));
     }
