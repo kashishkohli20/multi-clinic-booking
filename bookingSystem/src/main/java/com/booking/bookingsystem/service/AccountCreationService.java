@@ -3,7 +3,9 @@ package com.booking.bookingsystem.service;
 import com.booking.bookingsystem.entity.AppUser;
 import com.booking.bookingsystem.repository.AppUserRepository;
 import com.booking.bookingsystem.service.exception.AccountAlreadyExistsException;
+import com.booking.bookingsystem.service.exception.InvalidRegistrationException;
 import com.booking.bookingsystem.util.EmailNormalizer;
+import com.booking.bookingsystem.util.NameNormalizer;
 import jakarta.validation.Validator;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Size;
@@ -20,6 +22,7 @@ import java.nio.charset.StandardCharsets;
 @RequiredArgsConstructor
 public class AccountCreationService {
     private final AppUserRepository users;
+    private final NameNormalizer nameNormalizer;
     private final EmailNormalizer emailNormalizer;
     private final PasswordEncoder passwordEncoder;
     private final Validator validator;
@@ -30,14 +33,19 @@ public class AccountCreationService {
      * The returned entity is internal and must not be exposed as an API response.
      */
     @Transactional
-    public AppUser createAccount(String email, String rawPassword) {
+    public AppUser createAccount(String name, String email, String rawPassword) {
+        String cleanedName = nameNormalizer.validateAndNormalizeName(name);
+        if (email == null || email.isBlank()) {
+            throw new InvalidRegistrationException("Email must not be blank.");
+        }
         String normalizedEmail = emailNormalizer.normalize(email);
         if (!validator.validate(new EmailInput(normalizedEmail)).isEmpty()) {
-            throw new IllegalArgumentException("A valid email of at most 255 characters is required.");
+            throw new InvalidRegistrationException("A valid email of at most 255 characters is required.");
         }
         validatePassword(rawPassword);
 
         AppUser account = new AppUser();
+        account.setName(cleanedName);
         account.setEmail(normalizedEmail);
         account.setPasswordHash(passwordEncoder.encode(rawPassword));
         account.setEnabled(false);
@@ -59,10 +67,10 @@ public class AccountCreationService {
     private void validatePassword(String password) {
         if (password == null || password.isBlank()
                 || password.codePointCount(0, password.length()) < 15) {
-            throw new IllegalArgumentException("Password must contain at least 15 characters and not be blank.");
+            throw new InvalidRegistrationException("Password must contain at least 15 characters and not be blank.");
         }
         if (password.getBytes(StandardCharsets.UTF_8).length > 72) {
-            throw new IllegalArgumentException("Password must not exceed 72 UTF-8 bytes.");
+            throw new InvalidRegistrationException("Password must not exceed 72 UTF-8 bytes.");
         }
     }
 

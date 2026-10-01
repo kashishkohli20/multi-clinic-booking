@@ -2,6 +2,7 @@ package com.booking.bookingsystem.service;
 
 import com.booking.bookingsystem.repository.AppUserRepository;
 import com.booking.bookingsystem.util.EmailNormalizer;
+import com.booking.bookingsystem.util.NameNormalizer;
 import jakarta.validation.Validator;
 import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -29,9 +30,9 @@ class AccountCreationServiceTest {
                 new SQLException("Database failure", sqlState), constraint);
         var failure = new DataIntegrityViolationException("Database failure", cause);
         when(users.saveAndFlush(any())).thenThrow(failure);
-        var service = new AccountCreationService(users, new EmailNormalizer(), encoder, validator);
+        var service = new AccountCreationService(users, new NameNormalizer(), new EmailNormalizer(), encoder, validator);
 
         assertSame(failure, assertThrows(DataIntegrityViolationException.class,
-                () -> service.createAccount("alice@example.com", "A sample passphrase!")));
+                () -> service.createAccount("Alice", "alice@example.com", "A sample passphrase!")));
     }
 }

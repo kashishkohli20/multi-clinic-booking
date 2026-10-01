@@ -4,6 +4,7 @@ import com.booking.bookingsystem.PostgresTestConfiguration;
 import com.booking.bookingsystem.entity.AppUser;
 import com.booking.bookingsystem.repository.AppUserRepository;
 import com.booking.bookingsystem.service.exception.AccountAlreadyExistsException;
+import com.booking.bookingsystem.service.exception.InvalidRegistrationException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -30,6 +31,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @Import(PostgresTestConfiguration.class)
 @ActiveProfiles("test")
 class AccountCreationServiceIT {
+    private static final String NAME = "Alice";
     private static final String PASSWORD = "A sample passphrase!";
     private final String email = UUID.randomUUID() + "@example.com";
 
@@ -45,12 +47,13 @@ class AccountCreationServiceIT {
     }
 
     @Test
-    void normalizesEmailAndPersistsOnlyHashInDisabledAccount() {
+    void normalizesNameAndEmailAndPersistsOnlyHashInDisabledAccount() {
         String password = "  A sample passphrase!  ";
-        AppUser created = accounts.createAccount("  " + email.toUpperCase(Locale.ROOT) + "  ", password);
+        AppUser created = accounts.createAccount("  " + NAME + "  ", "  " + email.toUpperCase(Locale.ROOT) + "  ", password);
         AppUser stored = users.findById(created.getId()).orElseThrow();
 
         assertEquals(email, stored.getEmail());
+        assertEquals(NAME, stored.getName());
         assertFalse(stored.isEnabled());
         assertNotEquals(password, stored.getPasswordHash());
         assertTrue(encoder.matches(password, stored.getPasswordHash()));
@@ -66,10 +69,34 @@ class AccountCreationServiceIT {
 
     @ParameterizedTest
     @NullAndEmptySource
+    @ValueSource(strings = {" ", "\t\n", "\u2003"})
+    void rejectsBlankNameWithoutSavingAccount(String name) {
+        assertThrows(InvalidRegistrationException.class, () -> accounts.createAccount(name, email, PASSWORD));
+        assertEquals(0, accountCount());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"a", "😀"})
+    void rejectsNameBeyond255CodePointsWithoutSavingAccount(String character) {
+        assertThrows(InvalidRegistrationException.class,
+                () -> accounts.createAccount(character.repeat(256), email, PASSWORD));
+        assertEquals(0, accountCount());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"a", "😀"})
+    void persistsNameAt255CodePointLimitAfterTrimming(String character) {
+        String name = character.repeat(255);
+        AppUser created = accounts.createAccount(" " + name + " ", email, PASSWORD);
+        assertEquals(name, users.findById(created.getId()).orElseThrow().getName());
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
     @ValueSource(strings = {" ", "not-an-email", "alice@", "alice @example.com"})
     void rejectsInvalidEmailWithoutSavingAccount(String invalidEmail) {
         long before = users.count();
-        assertThrows(IllegalArgumentException.class, () -> accounts.createAccount(invalidEmail, PASSWORD));
+        assertThrows(InvalidRegistrationException.class, () -> accounts.createAccount(NAME, invalidEmail, PASSWORD));
         assertEquals(before, users.count());
     }
 
@@ -78,7 +105,7 @@ class AccountCreationServiceIT {
         String oversized = "a".repeat(64) + "@" + "b".repeat(63) + "." + "c".repeat(63)
                 + "." + "d".repeat(63) + ".com";
         long before = users.count();
-        assertThrows(IllegalArgumentException.class, () -> accounts.createAccount(oversized, PASSWORD));
+        assertThrows(InvalidRegistrationException.class, () -> accounts.createAccount(NAME, oversized, PASSWORD));
         assertEquals(before, users.count());
     }
 
@@ -86,7 +113,7 @@ class AccountCreationServiceIT {
     @NullAndEmptySource
     @ValueSource(strings = {"                ", "short", "12345678901234", "😀😀😀😀😀😀😀😀"})
     void rejectsMissingBlankOrShortPassword(String password) {
-        assertThrows(IllegalArgumentException.class, () -> accounts.createAccount(email, password));
+        assertThrows(InvalidRegistrationException.class, () -> accounts.createAccount(NAME, email, password));
         assertEquals(0, accountCount());
     }
 
@@ -94,14 +121,14 @@ class AccountCreationServiceIT {
     @ValueSource(strings = {"x", "é"})
     void rejectsPasswordBeyond72Utf8Bytes(String character) {
         String password = character.repeat(character.equals("x") ? 73 : 37);
-        assertThrows(IllegalArgumentException.class, () -> accounts.createAccount(email, password));
+        assertThrows(InvalidRegistrationException.class, () -> accounts.createAccount(NAME, email, password));
         assertEquals(0, accountCount());
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"123456789012345", "ééééééééééééééé", "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"})
     void accepts15UnicodeCodePoints(String password) {
-        AppUser created = accounts.createAccount(email, password);
+        AppUser created = accounts.createAccount(NAME, email, password);
         assertTrue(encoder.matches(password, users.findById(created.getId()).orElseThrow().getPasswordHash()));
     }
 
@@ -109,21 +136,23 @@ class AccountCreationServiceIT {
     @ValueSource(strings = {"x", "é"})
     void acceptsPasswordAt72Utf8Bytes(String character) {
         String password = character.repeat(character.equals("x") ? 72 : 36);
-        AppUser created = accounts.createAccount(email, password);
+        AppUser created = accounts.createAccount(NAME, email, password);
         assertTrue(encoder.matches(password, created.getPasswordHash()));
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     void duplicateEmailCannotReplaceExistingOrDeletedAccount(boolean deleted) {
-        AppUser original = accounts.createAccount(email, PASSWORD);
+        AppUser original = accounts.createAccount(NAME, email, PASSWORD);
         if (deleted) {
             users.deleteById(original.getId());
         }
         assertThrows(AccountAlreadyExistsException.class,
-                () -> accounts.createAccount(" " + email.toUpperCase(Locale.ROOT) + " ", "Different passphrase!"));
+                () -> accounts.createAccount("Someone else", " " + email.toUpperCase(Locale.ROOT) + " ", "Different passphrase!"));
 
         assertEquals(1, accountCount());
+        assertEquals(NAME, jdbc.queryForObject(
+                "select name from app_user where id = ?", String.class, original.getId()));
         assertEquals(original.getPasswordHash(), jdbc.queryForObject(
                 "select password_hash from app_user where id = ?", String.class, original.getId()));
         assertEquals(deleted, jdbc.queryForObject(
@@ -134,7 +163,7 @@ class AccountCreationServiceIT {
     void accountCreationRollsBackWhenEnclosingTransactionFails() {
         TransactionTemplate transaction = new TransactionTemplate(transactionManager);
         assertThrows(IllegalStateException.class, () -> transaction.executeWithoutResult(status -> {
-            accounts.createAccount(email, PASSWORD);
+            accounts.createAccount(NAME, email, PASSWORD);
             throw new IllegalStateException("Simulated later profile failure");
         }));
         assertEquals(0, accountCount());
@@ -160,7 +189,7 @@ class AccountCreationServiceIT {
     private boolean createConcurrently(String inputEmail, CyclicBarrier start) throws Exception {
         start.await(10, TimeUnit.SECONDS);
         try {
-            accounts.createAccount(inputEmail, PASSWORD);
+            accounts.createAccount(NAME, inputEmail, PASSWORD);
             return true;
         } catch (AccountAlreadyExistsException expected) {
             return false;

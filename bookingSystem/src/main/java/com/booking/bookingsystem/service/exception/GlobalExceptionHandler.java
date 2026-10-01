@@ -22,6 +22,20 @@ import lombok.extern.slf4j.Slf4j;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(InvalidRegistrationException.class)
+    public ResponseEntity<ApiErrorResponse> handleInvalidRegistration(
+            InvalidRegistrationException ex, HttpServletRequest request) {
+        return ResponseEntity.badRequest().body(new ApiErrorResponse(
+                Instant.now(), 400, "Bad Request", ex.getMessage(), request.getRequestURI()));
+    }
+
+    @ExceptionHandler(AccountAlreadyExistsException.class)
+    public ResponseEntity<ApiErrorResponse> handleAccountAlreadyExists(HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiErrorResponse(
+                Instant.now(), 409, "Conflict", "An account with this email already exists.",
+                request.getRequestURI()));
+    }
+
     // Catch our custom 404 Exception
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ApiErrorResponse> handleResourceNotFound(ResourceNotFoundException ex, HttpServletRequest request) {
