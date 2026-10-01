@@ -30,6 +30,9 @@ public class AppUser {
     @Column(name = "password_hash")
     private String passwordHash;
 
+    @Column(nullable = false)
+    private boolean enabled = false;
+
     @CreationTimestamp
     private Instant createdAt;
 
