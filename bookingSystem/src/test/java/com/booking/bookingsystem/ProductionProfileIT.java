@@ -34,6 +34,9 @@ class ProductionProfileIT {
                 "select count(*) from flyway_schema_history where version = '6' and success", Integer.class));
         assertEquals(1, jdbc.queryForObject(
                 "select count(*) from flyway_schema_history where version = '7' and success", Integer.class));
+        assertEquals(1, jdbc.queryForObject(
+                "select count(*) from flyway_schema_history where version = '8' and success", Integer.class));
+        assertEquals(0, jdbc.queryForObject("select count(*) from login_session", Integer.class));
         assertEquals(0, jdbc.queryForObject("select count(*) from patient", Integer.class));
     }
 }
