@@ -111,10 +111,6 @@ class AuthenticatedHoldIT {
         assertEquals(Slot.Status.HELD, slots.findById(slot.getId()).orElseThrow().getStatus());
         assertEquals(Timestamp.from(NOW.plusSeconds(60)), session().get("last_activity_at"));
         assertEquals(Timestamp.from(login.refresh().expiresAt()), session().get("expires_at"));
-        mvc.perform(post("/api/v1/confirm").cookie(csrf.cookie(), access(login.access().value()))
-                        .header("X-CSRF-TOKEN", csrf.value()).contentType("application/json")
-                        .content("{\"holdId\":\"" + saved.getId() + "\"}"))
-                .andExpect(status().isForbidden());
         assertEquals(Hold.Status.ACTIVE, holds.findById(saved.getId()).orElseThrow().getStatus());
     }
 

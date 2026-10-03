@@ -34,6 +34,6 @@ class DataSeederTest {
         assertEquals(Instant.parse("2030-01-02T03:00:00Z"), created.get(1).getStartTime());
         assertNotEquals(created.get(0).getClinic().getId(), created.get(1).getClinic().getId());
         verify(booking).holdSlot(eq(created.get(1).getId()), any());
-        verify(booking).confirmBooking(hold.getId());
+        verify(booking).confirmBooking(eq(hold.getId()), any(UUID.class), isNull());
     }
 }

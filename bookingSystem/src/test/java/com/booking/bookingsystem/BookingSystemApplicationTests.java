@@ -53,7 +53,7 @@ class BookingSystemApplicationTests {
 
         Hold hold = bookingService.holdSlot(slot.getId(), patientId);
         holds.flush();
-        Appointment appointment = bookingService.confirmBooking(hold.getId());
+        Appointment appointment = bookingService.confirmBooking(hold.getId(), hold.getHoldById(), null);
         appointments.flush();
 
         assertEquals(patientId, appointment.getPatientId());

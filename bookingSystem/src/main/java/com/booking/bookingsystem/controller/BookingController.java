@@ -49,9 +49,11 @@ public class BookingController {
     }
 
     @PostMapping("/confirm")
-    public ResponseEntity<AppointmentResponse> confirmBooking(@RequestBody @Valid ConfirmationRequest confirmationRequest) {
+    public ResponseEntity<AppointmentResponse> confirmBooking(@RequestBody @Valid ConfirmationRequest confirmationRequest,
+            @AuthenticationPrincipal CookieAuthenticationFilter.Principal caller) {
+        if (caller == null) throw new InvalidLoginSessionException();
         UUID holdId = confirmationRequest.holdId();
-        Appointment appointment = bookingService.confirmBooking(holdId);
+        Appointment appointment = patientBookings.confirmBooking(holdId, caller.accountId(), caller.sessionId());
         return ResponseEntity.status(HttpStatus.CREATED).body(AppointmentResponse.from(appointment));
     }
 }

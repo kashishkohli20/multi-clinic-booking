@@ -42,7 +42,7 @@ class BookingConstraintsIT {
         "slot set status = null", "slot set version = null", "slot set created_at = null", "slot set updated_at = null",
         "hold set slot_id = null", "hold set hold_by_id = null", "hold set expires_at = null",
         "hold set status = null", "hold set version = null", "hold set created_at = null", "hold set updated_at = null",
-        "appointment set patient_id = null", "appointment set booked_by_id = null", "appointment set booked_slot_id = null",
+        "appointment set patient_id = null", "appointment set booked_by_id = '00000000-0000-0000-0000-000000000000'", "appointment set booked_slot_id = null",
         "appointment set status = null", "appointment set created_at = null", "appointment set updated_at = null",
         "slot set status = 'INVALID'", "hold set status = 'INVALID'", "appointment set status = 'INVALID'"
     })
@@ -57,7 +57,7 @@ class BookingConstraintsIT {
         slot = slots.saveAndFlush(slot);
         Patient patient = patients.saveAndFlush(new Patient());
         Hold hold = booking.holdSlot(slot.getId(), patient.getId());
-        booking.confirmBooking(hold.getId());
+        booking.confirmBooking(hold.getId(), hold.getHoldById(), null);
         appointments.flush();
         String table = mutation.substring(0, mutation.indexOf(' '));
         Object id = switch (table) {

@@ -111,7 +111,7 @@ class ReservationDeadlineIT {
             Future<?> first = pool.submit(() -> {
                 decisionTime.set(confirm ? NOW.minusNanos(1) : NOW);
                 try {
-                    if (confirm) booking.confirmBooking(hold.getId());
+                    if (confirm) booking.confirmBooking(hold.getId(), hold.getHoldById(), null);
                     else expiry.expireHold(hold.getId());
                 } catch (OptimisticLockingFailureException | SlotUnavailableException expected) {
                     // The competing transaction won.

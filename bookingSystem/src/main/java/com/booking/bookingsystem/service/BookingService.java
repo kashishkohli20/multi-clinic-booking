@@ -7,6 +7,7 @@ import com.booking.bookingsystem.service.exception.SlotUnavailableException;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.security.access.AccessDeniedException;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -68,11 +69,18 @@ public class BookingService {
                 doctors.stream().map(Doctor::getId).toList(), Slot.Status.OPEN, clock.instant());
     }
 
+    /** Internal operation: patient/account identity comes from the authenticated boundary;
+     * a null actor is permitted only for system fixtures without a signed-in account. */
     @Transactional
-    public Appointment confirmBooking(UUID holdId) {
+    public Appointment confirmBooking(UUID holdId, UUID patientId, UUID actorAccountId) {
         // 1. Fetch and validate the active Hold record
         Hold hold = holdRepository.findById(holdId)
                 .orElseThrow(() -> new ResourceNotFoundException("Hold record not found with ID: " + holdId));
+
+        // Check ownership before revealing lifecycle state or changing any entity.
+        if (patientId == null || !patientId.equals(hold.getHoldById())) {
+            throw new AccessDeniedException("Access denied.");
+        }
 
         if (hold.getStatus() != Hold.Status.ACTIVE) {
             throw new SlotUnavailableException("This reservation cannot be confirmed because its status is: " + hold.getStatus());
@@ -103,7 +111,8 @@ public class BookingService {
         Appointment appointment = new Appointment();
         appointment.setBookedSlotId(slot.getId());
         appointment.setPatientId(hold.getHoldById());
-        appointment.setBookedById(hold.getHoldById());
+        // Caller supplies verified account identity; null is reserved for internal system fixtures.
+        appointment.setBookedById(actorAccountId);
         appointment.setStatus(Appointment.Status.CONFIRMED);
 
         return appointmentRepository.save(appointment);

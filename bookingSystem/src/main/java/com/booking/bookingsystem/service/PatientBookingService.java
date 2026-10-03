@@ -1,6 +1,7 @@
 package com.booking.bookingsystem.service;
 
 import com.booking.bookingsystem.entity.Hold;
+import com.booking.bookingsystem.entity.Appointment;
 import com.booking.bookingsystem.repository.PatientRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
@@ -25,5 +26,13 @@ public class PatientBookingService {
         var patient = patients.findForEnabledAccount(accountId)
                 .orElseThrow(() -> new AccessDeniedException("Patient profile required."));
         return bookings.holdSlot(slotId, patient.getId());
+    }
+
+    @Transactional
+    public Appointment confirmBooking(UUID holdId, UUID accountId, UUID sessionId) {
+        sessions.recordActivity(sessionId, accountId);
+        var patient = patients.findForEnabledAccount(accountId)
+                .orElseThrow(() -> new AccessDeniedException("Patient profile required."));
+        return bookings.confirmBooking(holdId, patient.getId(), accountId);
     }
 }

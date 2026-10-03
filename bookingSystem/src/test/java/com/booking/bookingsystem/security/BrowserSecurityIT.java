@@ -113,7 +113,7 @@ class BrowserSecurityIT {
                 .andExpect(status().isUnauthorized());
         var identity = identity();
         mvc.perform(post(path).cookie(csrf.cookie(), access(identity.token())).header("X-CSRF-TOKEN", csrf.value())
-                        .contentType("application/json").content("{\"slotId\":\"" + UUID.randomUUID() + "\"}"))
+                        .contentType("application/json").content("{\"slotId\":\"" + UUID.randomUUID() + "\",\"holdId\":\"" + UUID.randomUUID() + "\"}"))
                 .andExpect(status().isForbidden());
         verifyNoInteractions(booking);
     }

@@ -25,7 +25,8 @@ public class Appointment {
     @Column(name = "patient_id", nullable = false)
     private UUID patientId;
 
-    @Column(name = "booked_by_id", nullable = false)
+    // Account ID for authenticated bookings; null for unknown legacy/system actors.
+    @Column(name = "booked_by_id")
     private UUID bookedById;
 
     @Column(name = "booked_slot_id", nullable = false)

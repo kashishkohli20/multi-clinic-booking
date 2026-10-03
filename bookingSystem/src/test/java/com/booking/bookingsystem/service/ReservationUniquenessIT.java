@@ -51,7 +51,7 @@ class ReservationUniquenessIT {
         } else {
             jdbc.update("insert into appointment (id,booked_slot_id,patient_id,booked_by_id,status,created_at,updated_at,deleted) "
                     + "values (?,?,?,?,?,now(),now(),?)",
-                    UUID.randomUUID(), slotId, patientId, patientId, status, deleted);
+                    UUID.randomUUID(), slotId, patientId, null, status, deleted);
         }
     }
 

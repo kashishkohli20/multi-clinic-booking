@@ -111,7 +111,8 @@ public class DataSeeder implements CommandLineRunner {
                         .toInstant());
         bookedSlot = slotRepository.save(bookedSlot);
         var hold = bookingService.holdSlot(bookedSlot.getId(), patient.getId());
-        bookingService.confirmBooking(hold.getId());
+        // System-created fixture, with no signed-in account to attribute as its actor.
+        bookingService.confirmBooking(hold.getId(), patient.getId(), null);
         log.info("Seeded BOOKED Slot for tomorrow at 2:00 PM (Should be filtered out by search queries)");
 
         log.info("Data seeding completed successfully!");

@@ -110,7 +110,7 @@ public class BookingControllerTest {
             when(patientBookings.holdSlot(resourceId, caller.accountId(), caller.sessionId())).thenThrow(failure);
             body = "{\"slotId\":\"%s\"}".formatted(resourceId);
         } else {
-            when(bookingService.confirmBooking(resourceId)).thenThrow(failure);
+            when(patientBookings.confirmBooking(resourceId, caller.accountId(), caller.sessionId())).thenThrow(failure);
             body = "{\"holdId\":\"%s\"}".formatted(resourceId);
         }
 
@@ -178,10 +178,10 @@ public class BookingControllerTest {
         appointment.setId(UUID.randomUUID());
         appointment.setBookedSlotId(UUID.randomUUID());
         appointment.setPatientId(UUID.randomUUID());
-        appointment.setBookedById(appointment.getPatientId());
+        appointment.setBookedById(caller.accountId());
         appointment.setStatus(Appointment.Status.CONFIRMED);
         appointment.setCreatedAt(Instant.now());
-        when(bookingService.confirmBooking(holdId)).thenReturn(appointment);
+        when(patientBookings.confirmBooking(holdId, caller.accountId(), caller.sessionId())).thenReturn(appointment);
 
         mockMvc.perform(post("/api/v1/confirm").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"holdId\":\"%s\"}".formatted(holdId)))
@@ -199,7 +199,7 @@ public class BookingControllerTest {
         UUID holdId = UUID.randomUUID();
         var databaseFailure = new org.hibernate.exception.ConstraintViolationException(
                 "private database details", new java.sql.SQLException("duplicate", "23505"), constraint);
-        when(bookingService.confirmBooking(holdId)).thenThrow(
+        when(patientBookings.confirmBooking(holdId, caller.accountId(), caller.sessionId())).thenThrow(
                 new org.springframework.dao.DataIntegrityViolationException("private SQL", databaseFailure));
         mockMvc.perform(post("/api/v1/confirm").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"holdId\":\"%s\"}".formatted(holdId)))
@@ -216,7 +216,7 @@ public class BookingControllerTest {
         UUID holdId = UUID.randomUUID();
         var failure = new org.hibernate.exception.ConstraintViolationException(
                 "private database details", new java.sql.SQLException("failure", "23505"), constraint);
-        when(bookingService.confirmBooking(holdId)).thenThrow(
+        when(patientBookings.confirmBooking(holdId, caller.accountId(), caller.sessionId())).thenThrow(
                 new org.springframework.dao.DataIntegrityViolationException("private SQL", failure));
         mockMvc.perform(post("/api/v1/confirm").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"holdId\":\"%s\"}".formatted(holdId)))

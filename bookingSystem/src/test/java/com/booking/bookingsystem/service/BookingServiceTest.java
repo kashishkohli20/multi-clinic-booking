@@ -62,6 +62,7 @@ class BookingServiceTest {
     @Test
     void confirmBooking_CreatesAppointmentFromActiveHold() {
         UUID holdId = UUID.randomUUID();
+        UUID actorId = UUID.randomUUID();
         Slot slot = new Slot();
         slot.setId(UUID.randomUUID());
         slot.setStatus(Slot.Status.HELD);
@@ -75,10 +76,11 @@ class BookingServiceTest {
         when(slotRepository.findById(slot.getId())).thenReturn(Optional.of(slot));
         when(appointmentRepository.save(any(Appointment.class))).thenAnswer(i -> i.getArgument(0));
 
-        Appointment appointment = bookingService.confirmBooking(holdId);
+        Appointment appointment = bookingService.confirmBooking(holdId, hold.getHoldById(), actorId);
 
         assertEquals(slot.getId(), appointment.getBookedSlotId());
         assertEquals(hold.getHoldById(), appointment.getPatientId());
+        assertEquals(actorId, appointment.getBookedById());
         assertEquals(Appointment.Status.CONFIRMED, appointment.getStatus());
         assertEquals(Hold.Status.CONFIRMED, hold.getStatus());
         assertEquals(Slot.Status.BOOKED, slot.getStatus());
@@ -90,12 +92,14 @@ class BookingServiceTest {
     @ValueSource(longs = {0, -1})
     void confirmBooking_ExpiredHoldCreatesNoAppointment(long offset) {
         UUID holdId = UUID.randomUUID();
+        UUID actorId = UUID.randomUUID();
         Hold hold = new Hold();
+        hold.setHoldById(UUID.randomUUID());
         hold.setStatus(Hold.Status.ACTIVE);
         hold.setExpiresAt(NOW.plusNanos(offset));
         when(holdRepository.findById(holdId)).thenReturn(Optional.of(hold));
 
-        assertThrows(SlotUnavailableException.class, () -> bookingService.confirmBooking(holdId));
+        assertThrows(SlotUnavailableException.class, () -> bookingService.confirmBooking(holdId, hold.getHoldById(), actorId));
         verifyNoInteractions(slotRepository, appointmentRepository);
         verify(holdRepository, never()).save(any());
     }

@@ -19,9 +19,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
-import org.springframework.core.annotation.Order;
-import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.test.context.ActiveProfiles;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -46,15 +43,6 @@ class BookingHttpConcurrencyIT {
     private static final int CLIENTS = 10;
     @TestConfiguration(proxyBeanMethods = false)
     static class FixedTime {
-        // Confirmation alone retains Phase 1 coverage until its ownership integration.
-        // Holds use the real authentication/CSRF chain in this test.
-        @Bean @Order(0)
-        SecurityFilterChain legacyConfirmationTestChain(HttpSecurity http) throws Exception {
-            return http.securityMatcher("/api/v1/confirm")
-                    .csrf(config -> config.disable())
-                    .authorizeHttpRequests(config -> config.anyRequest().permitAll()).build();
-        }
-
         @Bean @Primary
         Clock testClock() { return Clock.fixed(NOW, ZoneOffset.UTC); }
     }
@@ -81,9 +69,11 @@ class BookingHttpConcurrencyIT {
         slot = slots.saveAndFlush(slot);
     }
 
-    private HttpRequest request(String path, String body) {
+    private HttpRequest request(String path, String body, Caller caller) {
         return HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/v1" + path))
                 .timeout(Duration.ofSeconds(15))
+                .header("Cookie", caller.csrfCookie() + "; booking_access=" + caller.access())
+                .header("X-CSRF-TOKEN", caller.csrfHeader())
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(body)).build();
     }
@@ -94,7 +84,11 @@ class BookingHttpConcurrencyIT {
         String email = UUID.randomUUID() + "@example.com";
         String password = "Booking concurrency passphrase!";
         Patient patient = registration.createPatient("Booking test", email, password);
-        var login = logins.login(email, password);
+        return caller(patient);
+    }
+
+    private Caller caller(Patient patient) throws Exception {
+        var login = logins.login(patient.getAppUser().getEmail(), "Booking concurrency passphrase!");
         try (var client = HttpClient.newHttpClient()) {
             var response = client.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/v1/auth/csrf"))
                     .GET().build(), HttpResponse.BodyHandlers.ofString());
@@ -185,12 +179,17 @@ class BookingHttpConcurrencyIT {
             held = json.readTree(response.body());
         }
         UUID holdId = UUID.fromString(held.get("id").asText());
-        HttpRequest confirmation = request("/confirm", "{\"holdId\":\"%s\"}".formatted(holdId));
-        JsonNode winner = assertOneWinner(concurrently(Collections.nCopies(CLIENTS, confirmation)), "/confirm");
+        List<HttpRequest> confirmations = new ArrayList<>();
+        for (int i = 0; i < CLIENTS; i++) {
+            // Independent sessions prevent a shared session lock from serializing the contenders.
+            confirmations.add(request("/confirm", "{\"holdId\":\"%s\"}".formatted(holdId), caller(caller.patient())));
+        }
+        JsonNode winner = assertOneWinner(concurrently(confirmations), "/confirm");
         var saved = appointments.findAll().stream().filter(a -> slot.getId().equals(a.getBookedSlotId())).toList();
         assertEquals(1, saved.size());
         assertEquals(Appointment.Status.CONFIRMED, saved.getFirst().getStatus());
         assertEquals(patient, saved.getFirst().getPatientId());
+        assertEquals(caller.patient().getAppUser().getId(), saved.getFirst().getBookedById());
         assertEquals(saved.getFirst().getId().toString(), winner.get("id").asText());
         assertEquals(Hold.Status.CONFIRMED, holds.findById(holdId).orElseThrow().getStatus());
         assertEquals(Slot.Status.BOOKED, slots.findById(slot.getId()).orElseThrow().getStatus());
@@ -254,7 +253,7 @@ class BookingHttpConcurrencyIT {
             assertEquals(201, held.statusCode(), held.body());
             assertEquals(1, search(client, name).size());
             UUID holdId = UUID.fromString(json.readTree(held.body()).get("id").asText());
-            var confirmed = client.send(request("/confirm", "{\"holdId\":\"%s\"}".formatted(holdId)),
+            var confirmed = client.send(request("/confirm", "{\"holdId\":\"%s\"}".formatted(holdId), caller),
                     HttpResponse.BodyHandlers.ofString());
             assertEquals(201, confirmed.statusCode(), confirmed.body());
             assertEquals(1, search(client, name).size());
