@@ -18,6 +18,14 @@ server:
 booking:
   hold-duration: ${BOOKING_HOLD_DURATION:30s}
   auth:
+    jwt:
+      # Internal foundation only; request authentication is a later chunk.
+      enabled: ${JWT_ENABLED:false}
+      issuer: ${JWT_ISSUER:}
+      audience: ${JWT_AUDIENCE:}
+      private-key: ${JWT_PRIVATE_KEY:}
+      public-key: ${JWT_PUBLIC_KEY:}
+      lifetime: ${JWT_ACCESS_LIFETIME:15m}
     session:
       max-lifetime: ${LOGIN_SESSION_MAX_LIFETIME:8h}
       idle-timeout: ${LOGIN_SESSION_IDLE_TIMEOUT:30m}
