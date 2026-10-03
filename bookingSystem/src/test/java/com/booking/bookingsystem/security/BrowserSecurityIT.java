@@ -184,7 +184,7 @@ class BrowserSecurityIT {
         verify(booking).findAvailableSlotsForDoctor("unknown");
         mvc.perform(get("/api/v1/auth/csrf").cookie(access("expired"))).andExpect(status().isOk());
         var csrf = csrf();
-        for (String path : List.of("refresh", "logout")) {
+        for (String path : List.of("logout")) {
             mvc.perform(post("/api/v1/auth/" + path).cookie(csrf.cookie(), access("expired"))
                             .header("X-CSRF-TOKEN", csrf.value()))
                     .andExpect(status().isNotFound()); // Security permits entry; endpoints are separate chunks.

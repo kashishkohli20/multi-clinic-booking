@@ -225,6 +225,8 @@ class RefreshTokenServiceIT {
         var before = rows(session.getId());
         assertThrows(IllegalTransactionStateException.class, () -> new TransactionTemplate(transactionManager)
                 .executeWithoutResult(status -> service.rotate(token.value())));
+        assertThrows(IllegalTransactionStateException.class, () -> new TransactionTemplate(transactionManager)
+                .executeWithoutResult(status -> service.rotateWithAccessToken(token.value())));
         assertEquals(before, rows(session.getId()));
     }
 

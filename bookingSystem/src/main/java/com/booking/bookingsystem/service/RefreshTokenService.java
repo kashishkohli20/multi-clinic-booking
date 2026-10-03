@@ -19,6 +19,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
+import java.util.function.Function;
 
 @Service
 public class RefreshTokenService {
@@ -28,17 +29,20 @@ public class RefreshTokenService {
     private final RefreshTokenCodec codec;
     private final Clock clock;
     private final EntityManager entityManager;
+    private final AccessTokenService accessTokens;
     private final TransactionTemplate rotationTransaction;
 
     public RefreshTokenService(RefreshTokenRepository tokens, LoginSessionRepository sessions,
                                LoginSessionService sessionService, RefreshTokenCodec codec, Clock clock,
-                               EntityManager entityManager, PlatformTransactionManager transactionManager) {
+                               EntityManager entityManager, PlatformTransactionManager transactionManager,
+                               AccessTokenService accessTokens) {
         this.tokens = tokens;
         this.sessions = sessions;
         this.sessionService = sessionService;
         this.codec = codec;
         this.clock = clock;
         this.entityManager = entityManager;
+        this.accessTokens = accessTokens;
         this.rotationTransaction = new TransactionTemplate(transactionManager);
         this.rotationTransaction.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
     }
@@ -62,8 +66,24 @@ public class RefreshTokenService {
      */
     @Transactional(propagation = Propagation.NEVER)
     public IssuedToken rotate(String rawToken) {
+        return rotate(rawToken, Function.identity());
+    }
+
+    /** Sign before commit so signing failure also rolls back refresh consumption/replacement. */
+    @Transactional(propagation = Propagation.NEVER)
+    public Renewal rotateWithAccessToken(String rawToken) {
+        return rotate(rawToken, refresh -> {
+            try {
+                return new Renewal(refresh, accessTokens.issue(refresh.accountId(), refresh.sessionId(), refresh.expiresAt()));
+            } catch (InvalidLoginSessionException failure) {
+                throw new InvalidRefreshTokenException();
+            }
+        });
+    }
+
+    private <T> T rotate(String rawToken, Function<IssuedToken, T> resultFactory) {
         String hash = codec.hash(rawToken);
-        IssuedToken result = rotationTransaction.execute(status -> {
+        T result = rotationTransaction.execute(status -> {
             UUID sessionId = tokens.findSessionIdByTokenHash(hash).orElseThrow(InvalidRefreshTokenException::new);
             var owner = sessions.lockOwnerById(sessionId).orElseThrow(InvalidRefreshTokenException::new);
             // Load only after the lock, so a waiting duplicate observes committed consumption.
@@ -83,7 +103,7 @@ public class RefreshTokenService {
             Instant storedNow = now.truncatedTo(ChronoUnit.MICROS);
             token.setConsumedAt(storedNow);
             tokens.flush(); // Release the partial unique index before inserting a successor.
-            return persist(session, storedNow);
+            return resultFactory.apply(persist(session, storedNow));
         });
         if (result == null) throw new InvalidRefreshTokenException();
         return result;
@@ -112,11 +132,15 @@ public class RefreshTokenService {
         return new IssuedToken(session.getAppUser().getId(), session.getId(), value, token.getExpiresAt());
     }
 
-    /** Internal result for the future cookie writer, never an HTTP response DTO. */
+    /** Internal result for the cookie writer, never an HTTP response DTO. */
     public record IssuedToken(UUID accountId, UUID sessionId, String value, Instant expiresAt) {
         @Override
         public String toString() {
             return "IssuedToken[REDACTED]";
         }
+    }
+
+    public record Renewal(IssuedToken refresh, AccessTokenService.IssuedToken access) {
+        @Override public String toString() { return "Renewal[REDACTED]"; }
     }
 }
