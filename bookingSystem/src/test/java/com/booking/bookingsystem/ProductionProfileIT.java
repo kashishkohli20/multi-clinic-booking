@@ -1,6 +1,7 @@
 package com.booking.bookingsystem;
 
 import com.booking.bookingsystem.config.DataSeeder;
+import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -22,20 +23,29 @@ class ProductionProfileIT {
     @Autowired ApplicationContext context;
     @Autowired Environment environment;
     @Autowired JdbcTemplate jdbc;
+    @Autowired Flyway flyway;
 
     @Test
-    void productionStartsWithMigrationsAndWithoutDemoSeeder() {
+    void productionUsesExpectedConfiguration() {
         // Testcontainers supplies actual credentials; the placeholder URL cannot be used.
-        assertTrue(context.getBeansOfType(DataSeeder.class).isEmpty());
         assertEquals("9090", environment.getProperty("server.port"));
         assertEquals("validate", environment.getProperty("spring.jpa.hibernate.ddl-auto"));
         assertEquals("never", environment.getProperty("server.error.include-message"));
-        assertEquals(1, jdbc.queryForObject(
-                "select count(*) from flyway_schema_history where version = '6' and success", Integer.class));
-        assertEquals(1, jdbc.queryForObject(
-                "select count(*) from flyway_schema_history where version = '7' and success", Integer.class));
-        assertEquals(1, jdbc.queryForObject(
-                "select count(*) from flyway_schema_history where version = '8' and success", Integer.class));
+    }
+
+    @Test
+    void productionAppliesAllDiscoveredMigrations() {
+        var migrations = flyway.info();
+        // Avoid a vacuous pass if no migrations were discovered at all.
+        assertTrue(migrations.applied().length > 0, "Expected applied database migrations");
+        assertEquals(0, migrations.pending().length, "All discovered migrations should be applied at startup");
+        // Successful context startup also verifies Hibernate's schema validation.
+    }
+
+    @Test
+    void productionStartsWithoutDemoSeederOrSeededData() {
+        assertTrue(context.getBeansOfType(DataSeeder.class).isEmpty());
+        assertEquals(0, jdbc.queryForObject("select count(*) from refresh_token", Integer.class));
         assertEquals(0, jdbc.queryForObject("select count(*) from login_session", Integer.class));
         assertEquals(0, jdbc.queryForObject("select count(*) from patient", Integer.class));
     }
