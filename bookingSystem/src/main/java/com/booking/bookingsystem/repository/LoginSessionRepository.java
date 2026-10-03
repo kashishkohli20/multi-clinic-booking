@@ -13,6 +13,19 @@ import java.time.Instant;
 import java.util.UUID;
 
 public interface LoginSessionRepository extends JpaRepository<LoginSession, UUID> {
+    // Lock the physical session even when its account is disabled or soft-deleted.
+    // A scalar projection avoids hydrating the account just to revoke a replayed session.
+    @Query(value = """
+            select id as "sessionId", user_id as "accountId"
+            from login_session where id = :sessionId for update
+            """, nativeQuery = true)
+    Optional<SessionOwner> lockOwnerById(@Param("sessionId") UUID sessionId);
+
+    interface SessionOwner {
+        UUID getSessionId();
+        UUID getAccountId();
+    }
+
     // The explicit account join also applies Hibernate's soft-delete restriction.
     @Query("""
             select s from LoginSession s

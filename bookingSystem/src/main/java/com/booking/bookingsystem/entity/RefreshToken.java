@@ -22,11 +22,11 @@ public class RefreshToken {
     @JoinColumn(name = "session_id", nullable = false, updatable = false)
     private LoginSession loginSession;
 
-    // Lowercase hexadecimal SHA-256 digest of the future random opaque token, never its raw value.
+    // Lowercase hexadecimal SHA-256 digest of the random opaque token, never its raw value.
     @Column(nullable = false, updatable = false, length = 64)
     private String tokenHash;
 
-    // The future lifecycle service supplies timestamps using Clock.
+    // The lifecycle service supplies timestamps using Clock.
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
