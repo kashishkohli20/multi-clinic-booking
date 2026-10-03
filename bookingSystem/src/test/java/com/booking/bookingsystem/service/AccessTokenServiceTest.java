@@ -4,6 +4,7 @@ import com.booking.bookingsystem.config.AccessTokenConfiguration;
 import com.booking.bookingsystem.config.AccessTokenProperties;
 import com.booking.bookingsystem.security.JwtTestKeys;
 import com.booking.bookingsystem.service.exception.InvalidAccessTokenException;
+import com.booking.bookingsystem.service.exception.InvalidLoginSessionException;
 import com.nimbusds.jose.*;
 import com.nimbusds.jose.crypto.MACSigner;
 import com.nimbusds.jose.crypto.RSASSASigner;
@@ -43,6 +44,22 @@ class AccessTokenServiceTest {
                 resource("PRIVATE KEY", KEYS.getPrivate().getEncoded()),
                 resource("PUBLIC KEY", KEYS.getPublic().getEncoded()), Duration.ofMinutes(15));
         service = new AccessTokenConfiguration().accessTokenService(properties, clock);
+    }
+
+    @Test
+    void sessionDeadlineCapsAccessExpiryWithoutRoundingItUp() {
+        var issued = service.issue(ACCOUNT, SESSION, NOW.plusSeconds(300).plusNanos(999_999_999));
+        assertEquals(NOW.plusSeconds(300), issued.expiresAt());
+        assertEquals(issued.expiresAt(), service.verify(issued.value()).expiresAt());
+        assertEquals("IssuedToken[REDACTED]", issued.toString());
+        var fullLifetime = service.issue(ACCOUNT, SESSION, NOW.plusSeconds(3600));
+        assertEquals(NOW.plusSeconds(900), fullLifetime.expiresAt());
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs = {-1, 0, 999_999_999})
+    void refusesSessionDeadlineThatCannotProduceAnUnexpiredJwt(long nanos) {
+        assertThrows(InvalidLoginSessionException.class, () -> service.issue(ACCOUNT, SESSION, NOW.plusNanos(nanos)));
     }
 
     @Test

@@ -22,6 +22,13 @@ import lombok.extern.slf4j.Slf4j;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(InvalidCredentialsException.class)
+    public ResponseEntity<ApiErrorResponse> handleInvalidCredentials(HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).cacheControl(org.springframework.http.CacheControl.noStore())
+                .body(new ApiErrorResponse(Instant.now(), 401, "Unauthorized", "Invalid email or password.",
+                        request.getRequestURI()));
+    }
+
     @ExceptionHandler(InvalidRegistrationException.class)
     public ResponseEntity<ApiErrorResponse> handleInvalidRegistration(
             InvalidRegistrationException ex, HttpServletRequest request) {

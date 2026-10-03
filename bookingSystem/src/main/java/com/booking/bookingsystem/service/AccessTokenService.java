@@ -2,6 +2,7 @@ package com.booking.bookingsystem.service;
 
 import com.booking.bookingsystem.config.AccessTokenProperties;
 import com.booking.bookingsystem.service.exception.InvalidAccessTokenException;
+import com.booking.bookingsystem.service.exception.InvalidLoginSessionException;
 import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
 import org.springframework.security.oauth2.jwt.*;
 
@@ -27,15 +28,24 @@ public class AccessTokenService {
     }
 
     public String issue(UUID accountId, UUID sessionId) {
+        return issue(accountId, sessionId, Instant.MAX).value();
+    }
+
+    /** Production issuance must respect the session's fixed absolute deadline. */
+    public IssuedToken issue(UUID accountId, UUID sessionId, Instant sessionExpiresAt) {
         Objects.requireNonNull(accountId, "Account ID is required");
         Objects.requireNonNull(sessionId, "Session ID is required");
+        Objects.requireNonNull(sessionExpiresAt, "Session deadline is required");
         Instant now = clock.instant().truncatedTo(ChronoUnit.SECONDS);
+        Instant expiresAt = now.plus(properties.lifetime());
+        if (sessionExpiresAt.isBefore(expiresAt)) expiresAt = sessionExpiresAt.truncatedTo(ChronoUnit.SECONDS);
+        if (!expiresAt.isAfter(now)) throw new InvalidLoginSessionException();
         var claims = JwtClaimsSet.builder().issuer(properties.issuer())
                 .audience(List.of(properties.audience())).subject(accountId.toString())
                 .claim("sid", sessionId.toString()).claim("token_use", "access")
-                .issuedAt(now).notBefore(now).expiresAt(now.plus(properties.lifetime())).build();
+                .issuedAt(now).notBefore(now).expiresAt(expiresAt).build();
         var header = JwsHeader.with(SignatureAlgorithm.RS256).type("at+jwt").build();
-        return encoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
+        return new IssuedToken(encoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue(), expiresAt);
     }
 
     /** Returns validated claims, not an authenticated principal or a resource permission. */
@@ -54,4 +64,9 @@ public class AccessTokenService {
     }
 
     public record Identity(UUID accountId, UUID sessionId, Instant expiresAt) { }
+
+    /** Internal result only; never serialize token material as an HTTP response. */
+    public record IssuedToken(String value, Instant expiresAt) {
+        @Override public String toString() { return "IssuedToken[REDACTED]"; }
+    }
 }

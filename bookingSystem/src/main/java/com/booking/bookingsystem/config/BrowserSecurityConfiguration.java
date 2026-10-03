@@ -47,9 +47,19 @@ public class BrowserSecurityConfiguration {
     }
 
     @Bean
+    public CookieCsrfTokenRepository csrfTokenRepository(BrowserSecurityProperties properties) {
+        var csrf = new CookieCsrfTokenRepository();
+        csrf.setCookieName(properties.secureCookies() ? "__Host-booking_csrf" : "booking_csrf");
+        csrf.setCookiePath("/");
+        csrf.setHeaderName("X-CSRF-TOKEN");
+        csrf.setCookieCustomizer(builder -> builder.secure(properties.secureCookies()).httpOnly(true).sameSite("Lax"));
+        return csrf;
+    }
+
+    @Bean
     public SecurityFilterChain browserSecurity(HttpSecurity http, AccessTokenService tokens,
                                                LoginSessionService sessions, BrowserSecurityProperties properties,
-                                               AuthenticationCookies cookies) throws Exception {
+                                               AuthenticationCookies cookies, CookieCsrfTokenRepository csrf) throws Exception {
         var cors = new CorsConfiguration();
         cors.setAllowedOrigins(properties.allowedOrigins());
         cors.setAllowCredentials(true);
@@ -59,11 +69,6 @@ public class BrowserSecurityConfiguration {
         var source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/api/**", cors);
 
-        var csrf = new CookieCsrfTokenRepository();
-        csrf.setCookieName(properties.secureCookies() ? "__Host-booking_csrf" : "booking_csrf");
-        csrf.setCookiePath("/");
-        csrf.setHeaderName("X-CSRF-TOKEN");
-        csrf.setCookieCustomizer(builder -> builder.secure(properties.secureCookies()).httpOnly(true).sameSite("Lax"));
         var xorHandler = new XorCsrfTokenRequestAttributeHandler();
         var csrfHandler = new CsrfTokenRequestHandler() {
             @Override

@@ -5,6 +5,9 @@ spring:
     password: ${DB_PASSWORD}
 
 booking:
+  auth:
+    browser:
+      secure-cookies: false
   seed-data: ${BOOKING_SEED_DATA:true}
 
 logging:
