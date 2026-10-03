@@ -198,10 +198,16 @@ class PatientRegistrationHttpIT {
     }
 
     private HttpResponse<String> postRaw(String body) throws Exception {
-        var request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + PATH))
-                .timeout(Duration.ofSeconds(15)).header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(body)).build();
         try (var client = HttpClient.newHttpClient()) {
+            var bootstrap = client.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/v1/auth/csrf"))
+                    .GET().build(), HttpResponse.BodyHandlers.ofString());
+            assertEquals(200, bootstrap.statusCode());
+            var csrf = json.readTree(bootstrap.body());
+            String cookie = bootstrap.headers().firstValue("set-cookie").orElseThrow().split(";", 2)[0];
+            var request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + PATH))
+                    .timeout(Duration.ofSeconds(15)).header("Content-Type", "application/json")
+                    .header("Cookie", cookie).header(csrf.get("headerName").asText(), csrf.get("token").asText())
+                    .POST(HttpRequest.BodyPublishers.ofString(body)).build();
             return client.send(request, HttpResponse.BodyHandlers.ofString());
         }
     }

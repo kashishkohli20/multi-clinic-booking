@@ -17,6 +17,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
+import org.springframework.core.annotation.Order;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.test.context.ActiveProfiles;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -39,6 +42,15 @@ class BookingHttpConcurrencyIT {
     private static final int CLIENTS = 10;
     @TestConfiguration(proxyBeanMethods = false)
     static class FixedTime {
+        // Preserve Phase 1 HTTP business-concurrency coverage while production denies
+        // these writes pending authenticated ownership. This bean exists only in this test.
+        @Bean @Order(0)
+        SecurityFilterChain legacyBookingTestChain(HttpSecurity http) throws Exception {
+            return http.securityMatcher("/api/v1/slots/hold", "/api/v1/confirm")
+                    .csrf(config -> config.disable())
+                    .authorizeHttpRequests(config -> config.anyRequest().permitAll()).build();
+        }
+
         @Bean @Primary
         Clock testClock() { return Clock.fixed(NOW, ZoneOffset.UTC); }
     }
