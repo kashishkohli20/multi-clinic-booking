@@ -9,6 +9,10 @@ import com.booking.bookingsystem.entity.Appointment;
 import com.booking.bookingsystem.entity.Hold;
 import com.booking.bookingsystem.entity.Slot;
 import com.booking.bookingsystem.service.BookingService;
+import com.booking.bookingsystem.service.PatientBookingService;
+import com.booking.bookingsystem.security.CookieAuthenticationFilter;
+import com.booking.bookingsystem.service.exception.InvalidLoginSessionException;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,12 +30,14 @@ import java.util.UUID;
 public class BookingController {
 
     private final BookingService bookingService;
+    private final PatientBookingService patientBookings;
 
     @PostMapping("/slots/hold")
-    public ResponseEntity<HoldResponse> holdSlot(@RequestBody @Valid SlotHoldRequest slotHoldRequest) {
+    public ResponseEntity<HoldResponse> holdSlot(@RequestBody @Valid SlotHoldRequest slotHoldRequest,
+            @AuthenticationPrincipal CookieAuthenticationFilter.Principal caller) {
+        if (caller == null) throw new InvalidLoginSessionException();
         UUID slotId = slotHoldRequest.slotId();
-        UUID patientId = slotHoldRequest.patientId();
-        Hold hold = bookingService.holdSlot(slotId, patientId);
+        Hold hold = patientBookings.holdSlot(slotId, caller.accountId(), caller.sessionId());
         return ResponseEntity.status(HttpStatus.CREATED).body(HoldResponse.from(hold));
     }
 

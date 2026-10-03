@@ -6,6 +6,8 @@ import com.booking.bookingsystem.repository.DoctorRepository;
 import com.booking.bookingsystem.repository.PatientRepository;
 
 import com.booking.bookingsystem.PostgresTestConfiguration;
+import com.booking.bookingsystem.service.PatientRegistrationService;
+import com.booking.bookingsystem.service.LoginService;
 import com.booking.bookingsystem.entity.*;
 import com.booking.bookingsystem.repository.*;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,16 +39,18 @@ import static org.junit.jupiter.api.Assertions.*;
 class BookingHttpConcurrencyIT {
     @Autowired DoctorRepository doctors;
     @Autowired PatientRepository patientsRepository;
+    @Autowired PatientRegistrationService registration;
+    @Autowired LoginService logins;
 
     private static final Instant NOW = Instant.parse("2030-01-01T00:00:00Z");
     private static final int CLIENTS = 10;
     @TestConfiguration(proxyBeanMethods = false)
     static class FixedTime {
-        // Preserve Phase 1 HTTP business-concurrency coverage while production denies
-        // these writes pending authenticated ownership. This bean exists only in this test.
+        // Confirmation alone retains Phase 1 coverage until its ownership integration.
+        // Holds use the real authentication/CSRF chain in this test.
         @Bean @Order(0)
-        SecurityFilterChain legacyBookingTestChain(HttpSecurity http) throws Exception {
-            return http.securityMatcher("/api/v1/slots/hold", "/api/v1/confirm")
+        SecurityFilterChain legacyConfirmationTestChain(HttpSecurity http) throws Exception {
+            return http.securityMatcher("/api/v1/confirm")
                     .csrf(config -> config.disable())
                     .authorizeHttpRequests(config -> config.anyRequest().permitAll()).build();
         }
@@ -82,6 +86,30 @@ class BookingHttpConcurrencyIT {
                 .timeout(Duration.ofSeconds(15))
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(body)).build();
+    }
+
+    private record Caller(Patient patient, String access, String csrfCookie, String csrfHeader) { }
+
+    private Caller caller() throws Exception {
+        String email = UUID.randomUUID() + "@example.com";
+        String password = "Booking concurrency passphrase!";
+        Patient patient = registration.createPatient("Booking test", email, password);
+        var login = logins.login(email, password);
+        try (var client = HttpClient.newHttpClient()) {
+            var response = client.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/v1/auth/csrf"))
+                    .GET().build(), HttpResponse.BodyHandlers.ofString());
+            assertEquals(200, response.statusCode());
+            String cookie = response.headers().firstValue("Set-Cookie").orElseThrow().split(";", 2)[0];
+            return new Caller(patient, login.access().value(), cookie, json.readTree(response.body()).get("token").asText());
+        }
+    }
+
+    private HttpRequest holdRequest(Caller caller, UUID slotId) {
+        return HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/v1/slots/hold"))
+                .timeout(Duration.ofSeconds(15)).header("Content-Type", "application/json")
+                .header("Cookie", caller.csrfCookie() + "; booking_access=" + caller.access())
+                .header("X-CSRF-TOKEN", caller.csrfHeader())
+                .POST(HttpRequest.BodyPublishers.ofString("{\"slotId\":\"" + slotId + "\"}")).build();
     }
 
     private List<HttpResponse<String>> concurrently(List<HttpRequest> requests) throws Exception {
@@ -130,10 +158,9 @@ class BookingHttpConcurrencyIT {
         List<HttpRequest> requests = new ArrayList<>();
         Set<UUID> patients = new HashSet<>();
         for (int i = 0; i < CLIENTS; i++) {
-            UUID patient = patientsRepository.saveAndFlush(new Patient()).getId();
-            patients.add(patient);
-            requests.add(request("/slots/hold", "{\"slotId\":\"%s\",\"patientId\":\"%s\"}"
-                    .formatted(slot.getId(), patient)));
+            Caller caller = caller();
+            patients.add(caller.patient().getId());
+            requests.add(holdRequest(caller, slot.getId()));
         }
         JsonNode winner = assertOneWinner(concurrently(requests), "/slots/hold");
         var saved = holds.findAll().stream().filter(h -> slot.getId().equals(h.getSlotId())).toList();
@@ -149,11 +176,11 @@ class BookingHttpConcurrencyIT {
 
     @Test
     void concurrentHttpConfirmationsCreateExactlyOneAppointment() throws Exception {
-        UUID patient = patientsRepository.saveAndFlush(new Patient()).getId();
+        Caller caller = caller();
+        UUID patient = caller.patient().getId();
         JsonNode held;
         try (HttpClient client = HttpClient.newHttpClient()) {
-            var response = client.send(request("/slots/hold", "{\"slotId\":\"%s\",\"patientId\":\"%s\"}"
-                    .formatted(slot.getId(), patient)), HttpResponse.BodyHandlers.ofString());
+            var response = client.send(holdRequest(caller, slot.getId()), HttpResponse.BodyHandlers.ofString());
             assertEquals(201, response.statusCode(), response.body());
             held = json.readTree(response.body());
         }
@@ -170,11 +197,12 @@ class BookingHttpConcurrencyIT {
     }
 
     @Test
-    void unknownPatientReturns404WithoutCreatingHold() throws Exception {
+    void deletedPatientReturns403WithoutCreatingHold() throws Exception {
+        Caller caller = caller();
+        patientsRepository.deleteById(caller.patient().getId());
         try (HttpClient client = HttpClient.newHttpClient()) {
-            var response = client.send(request("/slots/hold", "{\"slotId\":\"%s\",\"patientId\":\"%s\"}"
-                    .formatted(slot.getId(), UUID.randomUUID())), HttpResponse.BodyHandlers.ofString());
-            assertEquals(404, response.statusCode(), response.body());
+            var response = client.send(holdRequest(caller, slot.getId()), HttpResponse.BodyHandlers.ofString());
+            assertEquals(403, response.statusCode(), response.body());
         }
         assertEquals(Slot.Status.OPEN, slots.findById(slot.getId()).orElseThrow().getStatus());
         assertEquals(0, holds.findAll().stream().filter(h -> slot.getId().equals(h.getSlotId())).count());
@@ -215,14 +243,14 @@ class BookingHttpConcurrencyIT {
             past.setEndTime(NOW.plusSeconds(offset + 1800));
             slots.saveAndFlush(past);
         }
-        UUID patient = patientsRepository.saveAndFlush(new Patient()).getId();
+        Caller caller = caller();
+        UUID patient = caller.patient().getId();
         try (HttpClient client = HttpClient.newHttpClient()) {
             JsonNode results = search(client, name);
             assertEquals(2, results.size());
             assertEquals(slot.getId().toString(), results.get(0).get("id").asText());
             assertEquals(later.getId().toString(), results.get(1).get("id").asText());
-            var held = client.send(request("/slots/hold", "{\"slotId\":\"%s\",\"patientId\":\"%s\"}"
-                    .formatted(results.get(0).get("id").asText(), patient)), HttpResponse.BodyHandlers.ofString());
+            var held = client.send(holdRequest(caller, UUID.fromString(results.get(0).get("id").asText())), HttpResponse.BodyHandlers.ofString());
             assertEquals(201, held.statusCode(), held.body());
             assertEquals(1, search(client, name).size());
             UUID holdId = UUID.fromString(json.readTree(held.body()).get("id").asText());

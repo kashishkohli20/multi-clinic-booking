@@ -1,6 +1,17 @@
 package com.booking.bookingsystem.controller;
 
 import com.booking.bookingsystem.service.BookingService;
+import com.booking.bookingsystem.service.PatientBookingService;
+import com.booking.bookingsystem.security.CookieAuthenticationFilter;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Import;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -29,13 +40,35 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @WebMvcTest(BookingController.class) // Boots only the web layer and advice mechanisms
 @AutoConfigureMockMvc(addFilters = false) // Controller contract only; BrowserSecurityIT verifies production access rules.
+@Import(BookingControllerTest.PrincipalResolution.class)
 public class BookingControllerTest {
+
+    @TestConfiguration(proxyBeanMethods = false)
+    static class PrincipalResolution implements WebMvcConfigurer {
+        @Override
+        public void addArgumentResolvers(List<HandlerMethodArgumentResolver> resolvers) {
+            resolvers.add(new AuthenticationPrincipalArgumentResolver());
+        }
+    }
 
     @Autowired
     private MockMvc mockMvc;
 
     @MockitoBean
     private BookingService bookingService; // Spring mocks the service bean within the web context
+
+    @MockitoBean PatientBookingService patientBookings;
+    private final CookieAuthenticationFilter.Principal caller =
+            new CookieAuthenticationFilter.Principal(UUID.randomUUID(), UUID.randomUUID());
+
+    @BeforeEach
+    void identity() {
+        SecurityContextHolder.getContext().setAuthentication(
+                UsernamePasswordAuthenticationToken.authenticated(caller, null, List.of()));
+    }
+
+    @AfterEach
+    void clearIdentity() { SecurityContextHolder.clearContext(); }
 
     @Test
     void directBooking_IsNotAvailable() throws Exception {
@@ -53,8 +86,8 @@ public class BookingControllerTest {
                         .content("{}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors.slotId").value("Slot is required"))
-                .andExpect(jsonPath("$.errors.patientId").value("Patient is required"));
-        verifyNoInteractions(bookingService);
+                .andExpect(jsonPath("$.errors.patientId").doesNotExist());
+        verifyNoInteractions(bookingService, patientBookings);
     }
 
     @Test
@@ -71,12 +104,11 @@ public class BookingControllerTest {
     @ValueSource(strings = {"/api/v1/slots/hold", "/api/v1/confirm"})
     void reservation_OptimisticLockFailure_ReturnsConflict(String path) throws Exception {
         UUID resourceId = UUID.randomUUID();
-        UUID patientId = UUID.randomUUID();
         String body;
         var failure = new ObjectOptimisticLockingFailureException("internal entity details", resourceId);
         if (path.endsWith("/hold")) {
-            when(bookingService.holdSlot(resourceId, patientId)).thenThrow(failure);
-            body = "{\"slotId\":\"%s\",\"patientId\":\"%s\"}".formatted(resourceId, patientId);
+            when(patientBookings.holdSlot(resourceId, caller.accountId(), caller.sessionId())).thenThrow(failure);
+            body = "{\"slotId\":\"%s\"}".formatted(resourceId);
         } else {
             when(bookingService.confirmBooking(resourceId)).thenThrow(failure);
             body = "{\"holdId\":\"%s\"}".formatted(resourceId);
@@ -128,11 +160,10 @@ public class BookingControllerTest {
         hold.setExpiresAt(Instant.parse("2026-10-01T00:00:30Z"));
         hold.setVersion(3L);
         hold.setCreatedAt(Instant.now());
-        when(bookingService.holdSlot(hold.getSlotId(), hold.getHoldById())).thenReturn(hold);
+        when(patientBookings.holdSlot(hold.getSlotId(), caller.accountId(), caller.sessionId())).thenReturn(hold);
 
         mockMvc.perform(post("/api/v1/slots/hold").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"slotId\":\"%s\",\"patientId\":\"%s\"}"
-                                .formatted(hold.getSlotId(), hold.getHoldById())))
+                        .content("{\"slotId\":\"%s\"}".formatted(hold.getSlotId())))
                 .andExpect(status().isCreated())
                 .andExpect(content().json("""
                         {"id":"%s","slotId":"%s","holdById":"%s","status":"ACTIVE",

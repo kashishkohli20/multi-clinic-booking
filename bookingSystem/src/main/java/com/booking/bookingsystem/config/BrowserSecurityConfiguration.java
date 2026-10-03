@@ -97,7 +97,8 @@ public class BrowserSecurityConfiguration {
                         .requestMatchers(HttpMethod.HEAD, "/actuator/health", "/api/v1/slots/search", "/api/v1/auth/csrf").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/register", "/api/v1/auth/login",
                                 "/api/v1/auth/refresh", "/api/v1/auth/logout").permitAll()
-                        // Hold/confirm still accept caller-supplied identity; deny until ownership integration.
+                        .requestMatchers(HttpMethod.POST, "/api/v1/slots/hold").authenticated()
+                        // Confirmation remains denied until its patient ownership check is integrated.
                         .anyRequest().denyAll())
                 .addFilterAfter(new CookieAuthenticationFilter(tokens, sessions), CsrfFilter.class);
         return http.build();

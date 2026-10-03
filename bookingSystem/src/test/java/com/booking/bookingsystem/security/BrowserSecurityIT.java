@@ -106,14 +106,14 @@ class BrowserSecurityIT {
 
     @ParameterizedTest
     @ValueSource(strings = {"/api/v1/slots/hold", "/api/v1/confirm"})
-    void bookingWritesAreDeniedForAnonymousAndAuthenticatedCallers(String path) throws Exception {
+    void bookingWritesAreDeniedForAnonymousAndAccountsWithoutPatientProfile(String path) throws Exception {
         var csrf = csrf();
         mvc.perform(post(path).cookie(csrf.cookie()).header("X-CSRF-TOKEN", csrf.value())
                         .contentType("application/json").content("{}"))
                 .andExpect(status().isUnauthorized());
         var identity = identity();
         mvc.perform(post(path).cookie(csrf.cookie(), access(identity.token())).header("X-CSRF-TOKEN", csrf.value())
-                        .contentType("application/json").content("{}"))
+                        .contentType("application/json").content("{\"slotId\":\"" + UUID.randomUUID() + "\"}"))
                 .andExpect(status().isForbidden());
         verifyNoInteractions(booking);
     }

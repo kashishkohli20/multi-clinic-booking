@@ -22,6 +22,12 @@ import lombok.extern.slf4j.Slf4j;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(InvalidLoginSessionException.class)
+    public ResponseEntity<ApiErrorResponse> handleInvalidLoginSession(HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).cacheControl(org.springframework.http.CacheControl.noStore())
+                .body(new ApiErrorResponse(Instant.now(), 401, "Unauthorized", "Authentication required.", request.getRequestURI()));
+    }
+
     @ExceptionHandler(InvalidCredentialsException.class)
     public ResponseEntity<ApiErrorResponse> handleInvalidCredentials(HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).cacheControl(org.springframework.http.CacheControl.noStore())
