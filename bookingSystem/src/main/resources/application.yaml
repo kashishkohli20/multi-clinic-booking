@@ -17,6 +17,10 @@ server:
 
 booking:
   hold-duration: ${BOOKING_HOLD_DURATION:30s}
+  auth:
+    session:
+      max-lifetime: ${LOGIN_SESSION_MAX_LIFETIME:8h}
+      idle-timeout: ${LOGIN_SESSION_IDLE_TIMEOUT:30m}
 
 management:
   endpoints:
