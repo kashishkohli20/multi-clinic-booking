@@ -95,7 +95,7 @@ public class BrowserSecurityConfiguration {
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers(HttpMethod.GET, "/actuator/health", "/api/v1/slots/search", "/api/v1/auth/csrf").permitAll()
                         .requestMatchers(HttpMethod.HEAD, "/actuator/health", "/api/v1/slots/search", "/api/v1/auth/csrf").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/register", "/api/v1/auth/login",
+                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/register", "/api/v1/auth/register/doctor", "/api/v1/auth/login",
                                 "/api/v1/auth/refresh", "/api/v1/auth/logout").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/slots/hold", "/api/v1/confirm").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/v1/doctors/me").authenticated()

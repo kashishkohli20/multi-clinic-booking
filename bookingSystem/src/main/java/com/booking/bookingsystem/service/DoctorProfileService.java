@@ -23,8 +23,9 @@ public class DoctorProfileService {
     private final NameNormalizer nameNormalizer;
 
     /**
-     * Internal operation: accountId must come from a trusted, authenticated caller,
-     * never a client-selected account. Joins the caller's transaction.
+     * Internal operation: accountId must come from verified authentication or the
+     * new account created by DoctorRegistrationService, never a client-selected
+     * account. Joins the caller's transaction.
      * AuthenticatedDoctorProfileService validates the session and returns a DTO
      * for the HTTP boundary, not this entity.
      * Creates no account, patient or clinic membership and never claims an existing profile.

@@ -22,7 +22,7 @@ import java.util.UUID;
 public class CookieAuthenticationFilter extends OncePerRequestFilter {
     private final AccessTokenService tokens;
     private final LoginSessionService sessions;
-    private static final Set<String> AUTH_POSTS = Set.of("/api/v1/auth/register", "/api/v1/auth/login",
+    private static final Set<String> AUTH_POSTS = Set.of("/api/v1/auth/register", "/api/v1/auth/register/doctor", "/api/v1/auth/login",
             "/api/v1/auth/refresh", "/api/v1/auth/logout");
 
     public CookieAuthenticationFilter(AccessTokenService tokens, LoginSessionService sessions) {
