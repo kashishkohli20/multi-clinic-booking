@@ -48,5 +48,6 @@ class ProductionProfileIT {
         assertEquals(0, jdbc.queryForObject("select count(*) from refresh_token", Integer.class));
         assertEquals(0, jdbc.queryForObject("select count(*) from login_session", Integer.class));
         assertEquals(0, jdbc.queryForObject("select count(*) from patient", Integer.class));
+        assertEquals(0, jdbc.queryForObject("select count(*) from doctor_clinic_access_request", Integer.class));
     }
 }
