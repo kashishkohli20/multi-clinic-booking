@@ -98,6 +98,9 @@ public class BrowserSecurityConfiguration {
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/register", "/api/v1/auth/login",
                                 "/api/v1/auth/refresh", "/api/v1/auth/logout").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/slots/hold", "/api/v1/confirm").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/doctors/me").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/doctors/me").authenticated()
+                        .requestMatchers(HttpMethod.HEAD, "/api/v1/doctors/me").authenticated()
                         .anyRequest().denyAll())
                 .addFilterAfter(new CookieAuthenticationFilter(tokens, sessions), CsrfFilter.class);
         return http.build();

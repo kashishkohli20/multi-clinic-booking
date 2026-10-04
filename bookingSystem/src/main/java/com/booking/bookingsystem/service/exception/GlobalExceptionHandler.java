@@ -22,6 +22,13 @@ import lombok.extern.slf4j.Slf4j;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(DoctorProfileAlreadyExistsException.class)
+    public ResponseEntity<ApiErrorResponse> handleDoctorProfileAlreadyExists(HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).cacheControl(org.springframework.http.CacheControl.noStore())
+                .body(new ApiErrorResponse(Instant.now(), 409, "Conflict",
+                        "A Doctor profile already exists for this account.", request.getRequestURI()));
+    }
+
     @ExceptionHandler(InvalidLoginSessionException.class)
     public ResponseEntity<ApiErrorResponse> handleInvalidLoginSession(HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).cacheControl(org.springframework.http.CacheControl.noStore())
