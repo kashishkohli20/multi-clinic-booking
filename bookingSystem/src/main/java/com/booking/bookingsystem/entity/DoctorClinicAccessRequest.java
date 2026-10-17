@@ -31,7 +31,7 @@ public class DoctorClinicAccessRequest {
     @Column(nullable = false, length = 24)
     private Status status = Status.PENDING;
 
-    // The future lifecycle service will supply timestamps from Clock.
+    // The submission service supplies request time from Clock; decisions follow separately.
     @Column(nullable = false, updatable = false)
     private Instant requestedAt;
 

@@ -21,6 +21,18 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+    @ExceptionHandler(InvalidClinicAccessRequestException.class)
+    public ResponseEntity<ApiErrorResponse> handleInvalidClinicRequest(HttpServletRequest request) {
+        return ResponseEntity.badRequest().cacheControl(org.springframework.http.CacheControl.noStore())
+                .body(new ApiErrorResponse(Instant.now(), 400, "Bad Request", "Clinic ID is required.", request.getRequestURI()));
+    }
+
+    @ExceptionHandler(ClinicAccessRequestConflictException.class)
+    public ResponseEntity<ApiErrorResponse> handleClinicRequestConflict(HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).cacheControl(org.springframework.http.CacheControl.noStore())
+                .body(new ApiErrorResponse(Instant.now(), 409, "Conflict",
+                        "A pending request or existing doctor assignment prevents this request.", request.getRequestURI()));
+    }
 
     @ExceptionHandler(DoctorProfileAlreadyExistsException.class)
     public ResponseEntity<ApiErrorResponse> handleDoctorProfileAlreadyExists(HttpServletRequest request) {
